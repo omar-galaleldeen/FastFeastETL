@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0" version="29.6.3">
   <diagram name="Page-1" id="w-kgAM9cbvn0iPJ17mW-">
-    <mxGraphModel dx="2355" dy="931" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2336" pageHeight="1654" math="0" shadow="0">
+    <mxGraphModel dx="1215" dy="481" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2336" pageHeight="1654" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -274,7 +274,7 @@
         <mxCell id="EY2bk5d2f9dlHMPC8STp-103" parent="EY2bk5d2f9dlHMPC8STp-102" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
           <mxGeometry height="8" width="210" y="40" as="geometry" />
         </mxCell>
-        <mxCell id="EY2bk5d2f9dlHMPC8STp-104" parent="EY2bk5d2f9dlHMPC8STp-102" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="&lt;div&gt;physical files that&amp;nbsp;&lt;/div&gt;&lt;div&gt;- were not parsed&lt;/div&gt;&lt;div&gt;- contain wrong schema&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;table in DWH&lt;/div&gt;&lt;div&gt;- contains metadata&lt;/div&gt;" vertex="1">
+        <mxCell id="EY2bk5d2f9dlHMPC8STp-104" parent="EY2bk5d2f9dlHMPC8STp-102" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="&lt;div&gt;physical files that&amp;nbsp;&lt;/div&gt;&lt;div&gt;- were not parsed&lt;/div&gt;&lt;div&gt;- contain wrong schema&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;table in DWH&lt;/div&gt;&lt;div&gt;- contains metadata&lt;/div&gt;&lt;div&gt;- filename, hash, last processed date&lt;/div&gt;" vertex="1">
           <mxGeometry height="152" width="210" y="48" as="geometry" />
         </mxCell>
         <mxCell id="EY2bk5d2f9dlHMPC8STp-108" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="faulty records table" vertex="1">
@@ -411,7 +411,7 @@
         <mxCell id="EY2bk5d2f9dlHMPC8STp-158" parent="EY2bk5d2f9dlHMPC8STp-157" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
           <mxGeometry height="8" width="160" y="26" as="geometry" />
         </mxCell>
-        <mxCell id="EY2bk5d2f9dlHMPC8STp-159" parent="EY2bk5d2f9dlHMPC8STp-157" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="&lt;div&gt;given a record&lt;/div&gt;&lt;div&gt;and a reference table&lt;/div&gt;&lt;div&gt;and the db connection&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;check if it exist&lt;/div&gt;" vertex="1">
+        <mxCell id="EY2bk5d2f9dlHMPC8STp-159" parent="EY2bk5d2f9dlHMPC8STp-157" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="&lt;div&gt;given a record&lt;/div&gt;&lt;div&gt;and a reference table&lt;/div&gt;&lt;div&gt;and the db connection&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;check if it exist&lt;/div&gt;&amp;nbsp;for referential integrity" vertex="1">
           <mxGeometry height="210" width="160" y="34" as="geometry" />
         </mxCell>
         <mxCell id="EY2bk5d2f9dlHMPC8STp-160" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="Log to DWH" vertex="1">
