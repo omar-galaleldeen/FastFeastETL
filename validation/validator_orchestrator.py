@@ -1,5 +1,5 @@
-from  validation import schema_validator as sv
-from  validation import records_validator as rv
+from  validator import schema_validator as sv
+from  validator import records_validator as rv
 
 class validator_orchestrator:
 
@@ -13,6 +13,6 @@ class validator_orchestrator:
     def run():
         #run validate in schema_validator
 
-        #run validate_records in records_validator
+        #run validate_records
 
         return
