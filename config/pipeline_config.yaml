@@ -1,0 +1,25 @@
+watcher:
+  batch:
+    dir: "data/input/batch"
+    trigger_hour: 6
+    expected_files:
+      - "customers.csv"
+      - "drivers.csv"
+      - "agents.csv"
+      - "regions.csv"
+      - "reasons.csv"
+      - "categories.csv"
+      - "segments.csv"
+      - "teams.csv"
+      - "channels.csv"
+      - "priorities.csv"
+      - "reason_categories.csv"
+      - "restaurants.json"
+      - "cities.json"
+
+  stream:
+    dir: "data/input/stream"
+    expected_files:
+      - "orders.json"
+      - "tickets.csv"
+      - "ticket_events.json"

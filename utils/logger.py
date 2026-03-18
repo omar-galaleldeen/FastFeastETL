@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import json
+import logging
+import logging.handlers
+from datetime import datetime
+from pathlib import Path
+from queue import Queue
+
+
+# ─── Constants ────────────────────────────────────────────────────────────────
+
+LOGS_DIR = Path("logs")
+LOG_FILE  = LOGS_DIR / f"pipeline_{datetime.now().strftime('%Y-%m-%d')}.log"
+
+
+# ─── JSON formatter ───────────────────────────────────────────────────────────
+
+class _JsonFormatter(logging.Formatter):
+    """
+    Formats every log record as a single JSON line.
+    One line per record — easy to parse, grep, or ship to any log tool.
+
+    Output example:
+    {"time": "2026-02-22 06:01:23", "level": "INFO", "module": "watcher", "msg": "[batch] watcher started"}
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps({
+            "time"   : datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S"),
+            "level"  : record.levelname,
+            "module" : record.name,
+            "msg"    : record.getMessage(),
+        }, ensure_ascii=False)
+
+
+# ─── Queue listener (single writer thread) ────────────────────────────────────
+
+_log_queue:    Queue                          = Queue()
+_file_handler: logging.FileHandler | None     = None
+_listener:     logging.handlers.QueueListener | None = None
+
+
+def _setup() -> None:
+    """
+    Called once at first get_logger() call.
+    Creates logs/ dir, sets up the single file writer thread via QueueListener.
+    All other threads only put records into the queue — never write directly.
+    """
+    global _file_handler, _listener
+
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    _file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    _file_handler.setFormatter(_JsonFormatter())
+
+    # QueueListener owns the file handler — runs in its own thread
+    # only one thread ever writes to the file — no interleaving, no corruption
+    _listener = logging.handlers.QueueListener(
+        _log_queue,
+        _file_handler,
+        respect_handler_level=True,
+    )
+    _listener.start()
+
+    # root logger sends everything to the queue
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(logging.handlers.QueueHandler(_log_queue))
+
+
+_setup_done = False
+
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    Every module calls this once at module level:
+        logger = get_logger(__name__)
+
+    First call sets up the queue + listener + file handler.
+    Subsequent calls just return a named logger — setup runs only once.
+    """
+    global _setup_done
+    if not _setup_done:
+        _setup()
+        _setup_done = True
+
+    return logging.getLogger(name)
+
+
+def shutdown() -> None:
+    """
+    Called once when the pipeline finishes (in main.py).
+    Flushes remaining records and closes the log file cleanly.
+    """
+    if _listener:
+        _listener.stop()
+    if _file_handler:
+        _file_handler.close()
+ 
+##logs/
+##└── pipeline_2026-02-22.log
