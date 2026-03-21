@@ -3,23 +3,39 @@ watcher:
     dir: "data/input/batch"
     trigger_hour: 6
     expected_files:
-      - "customers.csv"
-      - "drivers.csv"
-      - "agents.csv"
-      - "regions.csv"
-      - "reasons.csv"
-      - "categories.csv"
-      - "segments.csv"
-      - "teams.csv"
-      - "channels.csv"
-      - "priorities.csv"
-      - "reason_categories.csv"
-      - "restaurants.json"
-      - "cities.json"
+      customers.csv:
+        table: "Dim_Customer"
+      drivers.csv:
+        table: "Dim_Driver"
+      agents.csv:
+        table: "Dim_Agent"
+      regions.csv:
+        table: "Dim_Region"
+      reasons.csv:
+        table: "Dim_Reason"
+      categories.csv:
+        table: "Dim_Restaurant"
+      segments.csv:
+        table: "Dim_Customer"
+      teams.csv:
+        table: "Dim_Agent"
+      channels.csv:
+        table: "Dim_Channel"
+      priorities.csv:
+        table: "Dim_Priority"
+      reason_categories.csv:
+        table: "Dim_Reason"
+      restaurants.json:
+        table: "Dim_Restaurant"
+      cities.json:
+        table: "Dim_Region"
 
   stream:
     dir: "data/input/stream"
     expected_files:
-      - "orders.json"
-      - "tickets.csv"
-      - "ticket_events.json"
+      orders.json:
+        table: "Fact_Order"
+      tickets.csv:
+        table: "Fact_Ticket"
+      ticket_events.json:
+        table: "Fact_Ticket_Event"
