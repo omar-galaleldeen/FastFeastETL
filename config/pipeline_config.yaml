@@ -23,3 +23,7 @@ watcher:
       - "orders.json"
       - "tickets.csv"
       - "ticket_events.json"
+
+
+tracker:
+  db_path: "data/tracker/pipeline_tracker.db"

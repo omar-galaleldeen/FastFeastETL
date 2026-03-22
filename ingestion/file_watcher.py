@@ -78,11 +78,11 @@ class StreamWatcherThread(threading.Thread):
         logger.info("[stream] observer started")
 
         try:
-            while not self._stop_event.is_set():
+            while not self._stop_event.is_set():    ## Keep the thread alive
                 time.sleep(1)
         finally:
-            observer.stop()
-            observer.join()
+            observer.stop() # Stop the observer when the thread is stopping
+            observer.join() # Wait for the observer thread to finish before exiting
 
         logger.info("[stream] observer stopped")
 
@@ -120,7 +120,8 @@ class BatchWatcherThread(threading.Thread):
             if now.tm_hour == self.trigger_hour and now.tm_min == 0:
                 self._scan()
                 time.sleep(60)          # avoid double-scan within same minute
-            time.sleep(30)              # check clock every 30s
+            time.sleep(30)              # check clock every 30s      
+
 
         logger.info("[batch] watcher stopped")
 
