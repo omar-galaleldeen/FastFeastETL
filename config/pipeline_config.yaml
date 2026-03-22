@@ -3,6 +3,7 @@ watcher:
     dir: "data/input/batch"
     trigger_hour: 6
     expected_files:
+
       customers.csv:
         table: "Dim_Customer"
       drivers.csv:
@@ -29,11 +30,9 @@ watcher:
         table: "Dim_Restaurant"
       cities.json:
         table: "Dim_Region"
-
   stream:
     dir: "data/input/stream"
     expected_files:
-<<<<<<< HEAD
       - "orders.json"
       - "tickets.csv"
       - "ticket_events.json"
@@ -41,11 +40,27 @@ watcher:
 
 tracker:
   db_path: "data/tracker/pipeline_tracker.db"
-=======
-      orders.json:
-        table: "Fact_Order"
-      tickets.csv:
-        table: "Fact_Ticket"
-      ticket_events.json:
-        table: "Fact_Ticket_Event"
->>>>>>> d7987d861a237d4b18ae83cc91dc66b08cbb0610
+
+reader:
+  file_type_map:
+    # batch — dimensions
+    customers.csv:         "customers"
+    drivers.csv:           "drivers"
+    agents.csv:            "agents"
+    regions.csv:           "regions"
+    reasons.csv:           "reasons"
+    categories.csv:        "categories"
+    segments.csv:          "segments"
+    teams.csv:             "teams"
+    channels.csv:          "channels"
+    priorities.csv:        "priorities"
+    reason_categories.csv: "reason_categories"
+    restaurants.json:      "restaurants"
+    cities.json:           "cities"
+    # stream — facts
+    orders.json:           "orders"
+    tickets.csv:           "tickets"
+    ticket_events.json:    "ticket_events"
+
+logging:
+  dir: "logs"  
