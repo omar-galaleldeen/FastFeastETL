@@ -33,9 +33,21 @@ watcher:
   stream:
     dir: "data/input/stream"
     expected_files:
-      - "orders.json"
-      - "tickets.csv"
-      - "ticket_events.json"
+      orders.json:
+        table: "Fact_Order"
+        foreign_keys:
+          customer_id: customers.csv
+          driver_id: drivers.csv
+          restaurant_id: restaurants.csv
+      tickets.csv:
+        table: "Fact_Ticket"
+        foreign_keys:
+          order_id: orders.csv
+          agent_id: agents.csv
+      ticket_events.json:
+        table: "Fact_Ticket_Event"
+        foreign_keys:
+          ticket_id: tickets.csv
 
 
 tracker:
