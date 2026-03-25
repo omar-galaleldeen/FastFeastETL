@@ -8,6 +8,7 @@ class Column():
     name: str
     dtype: str
     nullable: bool
+    allowed_values: list[str] = None
 
 @dataclass
 class Schema():
@@ -26,16 +27,19 @@ class Schema():
     
     def get_required_columns(self):
         return [col.name for col in self.columns if not col.nullable ]
+    
+    def get_categorical_columns(self) -> list[Column]:
+        return [col for col in self.columns if col.allowed_values is not None]
 
 #========================BATCH============================
 CITIES = Schema(
     file="cities",
     primary_key="city_id",
     columns=[
-        Column(name="city_id", dtype="int64", nullable=False),
-        Column(name="city_name", dtype="str", nullable=True),
-        Column(name="country", dtype="str", nullable=True),
-        Column(name="timezone", dtype="str", nullable=True),
+        Column(name="city_id", dtype="int", nullable=False),
+        Column(name="city_name", dtype="str", nullable=False),
+        Column(name="country", dtype="str", nullable=False),
+        Column(name="timezone", dtype="str", nullable=False),
     ],
 )
 
@@ -44,10 +48,10 @@ REGIONS = Schema(
     file="regions",
     primary_key="region_id",
     columns=[
-        Column("region_id",         "int64",   nullable=False),
-        Column("region_name",       "str",   nullable=True),
-        Column("city_id",           "int64",   nullable=True),
-        Column("delivery_base_fee", "float64", nullable=True),
+        Column("region_id",         "int",   nullable=False),
+        Column("region_name",       "str",   nullable=False),
+        Column("city_id",           "int",   nullable=False),
+        Column("delivery_base_fee", "float", nullable=False),
     ],
 )
  
@@ -55,9 +59,9 @@ SEGMENTS = Schema(
     file="segments",
     primary_key="segment_id",
     columns=[
-        Column("segment_id",       "int64",  nullable=False),
-        Column("segment_name",     "str",  nullable=True),
-        Column("discount_pct",     "int64",  nullable=True),
+        Column("segment_id",       "int",  nullable=False),
+        Column("segment_name",     "str",  nullable=False, allowed_values=["Regular", "VIP"]),
+        Column("discount_pct",     "int",  nullable=True),
         Column("priority_support", "bool", nullable=True),
     ],
 )
@@ -66,8 +70,8 @@ CATEGORIES = Schema(
     file="categories",
     primary_key="category_id",
     columns=[
-        Column("category_id",   "int64", nullable=False),
-        Column("category_name", "str", nullable=True),
+        Column("category_id",   "int", nullable=False),
+        Column("category_name", "str", nullable=False),
     ],
 )
  
@@ -75,7 +79,7 @@ TEAMS = Schema(
     file="teams",
     primary_key="team_id",
     columns=[
-        Column("team_id",   "int64", nullable=False),
+        Column("team_id",   "int", nullable=False),
         Column("team_name", "str", nullable=True),
     ],
 )
@@ -84,8 +88,9 @@ REASON_CATEGORIES = Schema(
     file="reason_categories",
     primary_key="reason_category_id",
     columns=[
-        Column("reason_category_id", "int64", nullable=False),
-        Column("category_name",      "str", nullable=True),
+        Column("reason_category_id", "int", nullable=False),
+        Column("category_name",      "str", nullable=False,
+               allowed_values=["Delivery", "Food", "Payment"]),
     ],
 )
  
@@ -93,11 +98,11 @@ REASONS = Schema(
     file="reasons",
     primary_key="reason_id",
     columns=[
-        Column("reason_id",          "int64",   nullable=False),
+        Column("reason_id",          "int",   nullable=False),
         Column("reason_name",        "str",   nullable=True),
-        Column("reason_category_id", "int64",   nullable=True),
-        Column("severity_level",     "int64",   nullable=True),
-        Column("typical_refund_pct", "float64", nullable=True),
+        Column("reason_category_id", "int",   nullable=True),
+        Column("severity_level",     "int",   nullable=True),
+        Column("typical_refund_pct", "float", nullable=True),
     ]
 )
  
@@ -105,8 +110,9 @@ CHANNELS = Schema(
     file="channels",
     primary_key="channel_id",
     columns=[
-        Column("channel_id",   "int64", nullable=False),
-        Column("channel_name", "str", nullable=True),
+        Column("channel_id",   "int", nullable=False),
+        Column("channel_name", "str", nullable=False,
+                       allowed_values=["app", "chat", "phone", "email"]),
     ],
 )
  
@@ -114,11 +120,13 @@ PRIORITIES = Schema(
     file="priorities",
     primary_key="priority_id",
     columns=[
-        Column("priority_id",              "int64", nullable=False),
-        Column("priority_code",            "str", nullable=True),
-        Column("priority_name",            "str", nullable=True),
-        Column("sla_first_response_min",   "int64", nullable=True),
-        Column("sla_resolution_min",       "int64", nullable=True),
+        Column("priority_id",              "int", nullable=False),
+        Column("priority_code",            "str", nullable=False,
+               allowed_values=["P1", "P2", "P3", "P4"]),
+        Column("priority_name",            "str", nullable=False,
+               allowed_values=["Critical", "High", "Medium", "Low"]),
+        Column("sla_first_response_min",   "int", nullable=True),
+        Column("sla_resolution_min",       "int", nullable=True),
     ],
 )
 
@@ -126,16 +134,16 @@ CUSTOMERS = Schema(
     file="customers",
     primary_key="customer_id",
     columns=[
-        Column("customer_id",  "int64",      nullable=False),
+        Column("customer_id",  "int",      nullable=False),
         Column("full_name",    "str",      nullable=True),
         Column("email",        "str",      nullable=True),
         Column("phone",        "str",      nullable=True),
-        Column("region_id",    "float64",      nullable=True),
-        Column("segment_id",   "int64",      nullable=True),
-        Column("signup_date",  "str", nullable=True),
-        Column("gender",       "str",      nullable=True),
-        Column("created_at",   "str", nullable=True),
-        Column("updated_at",   "str", nullable=True),
+        Column("region_id",    "float",      nullable=True),
+        Column("segment_id",   "int",      nullable=True),
+        Column("signup_date",  "datetime", nullable=True),
+        Column("gender",       "str",      nullable=True, allowed_values=["male", "female"]),
+        Column("created_at",   "datetime", nullable=True),
+        Column("updated_at",   "datetime", nullable=True),
     ],
 )
  
@@ -143,16 +151,17 @@ RESTAURANTS = Schema(
     file="restaurants",
     primary_key="restaurant_id",
     columns=[
-        Column("restaurant_id",      "int64",   nullable=False),
+        Column("restaurant_id",      "int",   nullable=False),
         Column("restaurant_name",    "str",   nullable=True),
-        Column("region_id",          "int64",   nullable=True),
-        Column("category_id",        "int64",   nullable=True),
-        Column("price_tier",         "str",   nullable=True),
-        Column("rating_avg",         "float64", nullable=True),
-        Column("prep_time_avg_min",  "int64",   nullable=True),
+        Column("region_id",          "int",   nullable=True),
+        Column("category_id",        "int",   nullable=True),
+        Column("price_tier",         "str",   nullable=True,
+               allowed_values=["Low", "Mid", "High"]),
+        Column("rating_avg",         "float", nullable=True),
+        Column("prep_time_avg_min",  "int",   nullable=True),
         Column("is_active",          "bool",  nullable=True),
-        Column("created_at",         "datetime64[us]", nullable=True),
-        Column("updated_at",         "datetime64[us]", nullable=True),
+        Column("created_at",         "datetime", nullable=True),
+        Column("updated_at",         "datetime", nullable=True),
     ],
 )
  
@@ -160,21 +169,22 @@ DRIVERS = Schema(
     file="drivers",
     primary_key="driver_id",
     columns=[
-        Column("driver_id",            "int64",   nullable=False),
+        Column("driver_id",            "int",   nullable=False),
         Column("driver_name",          "str",   nullable=True),
         Column("driver_phone",         "str",   nullable=True),
-        Column("national_id",          "int64",   nullable=True),
-        Column("region_id",            "int64",   nullable=True),
-        Column("shift",                "str",   nullable=True),
+        Column("national_id",          "int",   nullable=True),
+        Column("region_id",            "int",   nullable=True),
+        Column("shift",                "str",   nullable=True,
+               allowed_values=["morning", "evening", "night"]),
         Column("vehicle_type",         "str",   nullable=True),
-        Column("hire_date",            "str", nullable=True),
-        Column("rating_avg",           "float64", nullable=True),
-        Column("on_time_rate",         "float64", nullable=True),
-        Column("cancel_rate",          "float64", nullable=True),
-        Column("completed_deliveries", "int64",   nullable=False),
+        Column("hire_date",            "datetime", nullable=True),
+        Column("rating_avg",           "float", nullable=True),
+        Column("on_time_rate",         "float", nullable=True),
+        Column("cancel_rate",          "float", nullable=True),
+        Column("completed_deliveries", "int",   nullable=False),
         Column("is_active",            "bool",  nullable=True),
-        Column("created_at",           "str", nullable=True),
-        Column("updated_at",           "str", nullable=True),
+        Column("created_at",           "datetime", nullable=True),
+        Column("updated_at",           "datetime", nullable=True),
     ],
 )
  
@@ -182,19 +192,20 @@ AGENTS = Schema(
     file="agents",
     primary_key="agent_id",
     columns=[
-        Column("agent_id",             "int64",   nullable=False),
+        Column("agent_id",             "int",   nullable=False),
         Column("agent_name",           "str",   nullable=True),
         Column("agent_email",          "str",   nullable=True),
-        Column("agent_phone",          "int64",   nullable=True),
-        Column("team_id",              "int64",   nullable=True),
-        Column("skill_level",          "str",   nullable=True),
+        Column("agent_phone",          "int",   nullable=True),
+        Column("team_id",              "int",   nullable=True),
+        Column("skill_level",          "str",   nullable=True,
+               allowed_values=["Junior", "Mid", "Senior", "Lead"]),
         Column("hire_date",            "str", nullable=True),
-        Column("avg_handle_time_min",  "int64",   nullable=True),
-        Column("resolution_rate",      "float64", nullable=True),
-        Column("csat_score",           "float64", nullable=True),
+        Column("avg_handle_time_min",  "int",   nullable=True),
+        Column("resolution_rate",      "float", nullable=True),
+        Column("csat_score",           "float", nullable=True),
         Column("is_active",            "bool",  nullable=True),
-        Column("created_at",           "str", nullable=True),
-        Column("updated_at",           "str", nullable=True),
+        Column("created_at",           "datetime", nullable=True),
+        Column("updated_at",           "datetime", nullable=True),
     ],
 )
 
@@ -204,18 +215,20 @@ ORDERS = Schema(
     primary_key="order_id",
     columns=[
         Column("order_id",        "str",      nullable=False),
-        Column("customer_id",     "int64",      nullable=True),
-        Column("restaurant_id",   "int64",      nullable=True),
-        Column("driver_id",       "int64",      nullable=True),
-        Column("region_id",       "int64",      nullable=True),
-        Column("order_amount",    "float64",    nullable=True),
-        Column("delivery_fee",    "float64",    nullable=True),
-        Column("discount_amount", "int64",    nullable=True),
-        Column("total_amount",    "float64",    nullable=True),
-        Column("order_status",    "str",      nullable=True),
-        Column("payment_method",  "str",      nullable=True),
-        Column("order_created_at","datetime64[us]", nullable=True),
-        Column("delivered_at",    "datetime64[us]", nullable=True),
+        Column("customer_id",     "int",      nullable=True),
+        Column("restaurant_id",   "int",      nullable=True),
+        Column("driver_id",       "int",      nullable=True),
+        Column("region_id",       "int",      nullable=True),
+        Column("order_amount",    "float",    nullable=True),
+        Column("delivery_fee",    "float",    nullable=True),
+        Column("discount_amount", "int",    nullable=True),
+        Column("total_amount",    "float",    nullable=True),
+        Column("order_status",    "str",      nullable=True,
+                allowed_values=["Delivered", "Cancelled", "Refunded"]),
+        Column("payment_method",  "str",      nullable=True,
+               allowed_values=["card", "cash", "wallet"]),
+        Column("order_created_at","datetime", nullable=True),
+        Column("delivered_at",    "datetime", nullable=True),
     ],
 )
  
@@ -225,20 +238,21 @@ TICKETS = Schema(
     columns=[
         Column("ticket_id",          "str",      nullable=False),
         Column("order_id",           "str",      nullable=True),
-        Column("customer_id",        "int64",      nullable=True),
-        Column("driver_id",          "int64",      nullable=True),
-        Column("restaurant_id",      "int64",      nullable=True),
-        Column("agent_id",           "int64",      nullable=True),
-        Column("reason_id",          "int64",      nullable=True),
-        Column("priority_id",        "int64",      nullable=True),
-        Column("channel_id",         "int64",      nullable=True),
-        Column("status",             "str",      nullable=True),
-        Column("refund_amount",      "float64",    nullable=True),
-        Column("created_at",         "str", nullable=True),
-        Column("first_response_at",  "str", nullable=True),
-        Column("resolved_at",        "str", nullable=True),
-        Column("sla_first_due_at",   "str", nullable=True),
-        Column("sla_resolve_due_at", "str", nullable=True),
+        Column("customer_id",        "int",      nullable=True),
+        Column("driver_id",          "int",      nullable=True),
+        Column("restaurant_id",      "int",      nullable=True),
+        Column("agent_id",           "int",      nullable=True),
+        Column("reason_id",          "int",      nullable=True),
+        Column("priority_id",        "int",      nullable=True),
+        Column("channel_id",         "int",      nullable=True),
+        Column("status",             "str",      nullable=True,
+               allowed_values=["Resolved", "Closed", "Reopened", "Open", "InProgress"]),
+        Column("refund_amount",      "float",    nullable=True),
+        Column("created_at",         "datetime", nullable=True),
+        Column("first_response_at",  "datetime", nullable=True),
+        Column("resolved_at",        "datetime", nullable=True),
+        Column("sla_first_due_at",   "datetime", nullable=True),
+        Column("sla_resolve_due_at", "datetime", nullable=True),
     ],
 )
  
@@ -248,10 +262,12 @@ TICKET_EVENTS = Schema(
     columns=[
         Column("event_id",   "str", nullable=False),
         Column("ticket_id",  "str", nullable=True),
-        Column("agent_id",   "int64", nullable=True),
-        Column("event_ts",   "str", nullable=True),
-        Column("old_status", "str", nullable=True),
-        Column("new_status", "str", nullable=True),
+        Column("agent_id",   "int", nullable=True),
+        Column("event_ts",   "datetime", nullable=True),
+        Column("old_status", "str", nullable=True,
+               allowed_values=["Open", "InProgress", "Resolved", "Closed", "Reopened"]),
+        Column("new_status", "str", nullable=False,
+               allowed_values=["Open", "InProgress", "Resolved", "Closed", "Reopened"]),
         Column("notes",      "str", nullable=True),
     ],
 )
