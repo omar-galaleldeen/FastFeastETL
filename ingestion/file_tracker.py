@@ -14,7 +14,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ─── Config ───────────────────────────────────────────────────────────────────
+# ─── Config ─────────────────────────────────────────────────────────────────── 
 
 _cfg    = get_config()
 DB_PATH = Path(_cfg["tracker"]["db_path"])
@@ -212,8 +212,7 @@ def is_processed(file_path: str, file_hash: str) -> bool:
     Puts a _CheckCmd into the queue and gets a Future back.
     The Future.result() call will wait only if the tracker thread hasn't
     answered yet — in practice it's near-instant since SQLite reads are fast.
-
-    Pipeline is never blocked on disk — only on the in-memory Future.
+ 
     """
     future: Future[bool] = Future()
     _cmd_queue.put(_CheckCmd(
