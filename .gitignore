@@ -1,6 +1,7 @@
-* .csv
-* .json
-* .xml
-* .pdf 
-* .drawio
-
+*.csv
+*.json
+*.xml
+*.pdf 
+*.log
+*.tmp
+*test_*.py
