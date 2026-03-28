@@ -9,7 +9,7 @@ from queue import Queue
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from ingestion.tracker import is_processed
+from ingestion.file_tracker import is_processed
 from config.config_loader import get_config
 from utils.logger import get_logger
 
@@ -40,12 +40,11 @@ class StreamEventHandler(FileSystemEventHandler):
             return
 
         path = Path(event.src_path)
-
+        print("EVENT:", event.src_path)
+        
         if path.name not in STREAM_FILES:
             return                      # silently ignore unexpected files
 
-        if is_processed(str(path)):
-            return                      # silently skip already-processed
 
         self.file_queue.put(path)       # non-blocking, thread-safe
 
@@ -90,7 +89,7 @@ class StreamWatcherThread(threading.Thread):
         self._stop_event.set()
 
 
-# ─── Batch thread ─────────────────────────────────────────────────────────────
+# ─── Batch thread  
 
 class BatchWatcherThread(threading.Thread):
     """
@@ -140,7 +139,7 @@ class BatchWatcherThread(threading.Thread):
 
         # queue only files that match expected names and aren't processed yet
         for f in found:
-            if f.name in BATCH_FILES and not is_processed(str(f)):
+            if f.name in BATCH_FILES :
                 self.file_queue.put(f)
 
     def stop(self) -> None:
