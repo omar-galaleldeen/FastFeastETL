@@ -36,18 +36,18 @@ watcher:
       orders.json:
         table: "Fact_Order"
         foreign_keys:
-          customer_id: customers.csv
-          driver_id: drivers.csv
-          restaurant_id: restaurants.json
+          customer_id: customers
+          driver_id: drivers
+          restaurant_id: restaurants
       tickets.csv:
         table: "Fact_Ticket"
         foreign_keys:
-          order_id: orders.json
-          agent_id: agents.csv
+          order_id: orders
+          agent_id: agents
       ticket_events.json:
         table: "Fact_Ticket_Event"
         foreign_keys:
-          ticket_id: tickets.csv
+          ticket_id: tickets
 
 
 tracker:
