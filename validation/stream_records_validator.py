@@ -43,38 +43,32 @@ class stream_records_validator():
         all_quarantined = pd.DataFrame()
 
         #Null Validation
-        is_nulls_valid, no_null_df, count_nulls , rejected_nulls = self.validate_nulls(self.df)
+        is_nulls_valid, no_null_df, rejected_nulls = self.validate_nulls(self.df)
         if not is_nulls_valid:
             all_quarantined = pd.concat([all_quarantined, rejected_nulls]) 
-            print(f"Found Nulls in {self.file_name} → {count_nulls}")
 
 
         #Duplicate Validation
-        is_dup_valid, no_dup_df, count_dup = self.validate_duplicates(no_null_df, pk_col)
+        is_dup_valid, no_dup_df, rejected_dup= self.validate_duplicates(no_null_df, pk_col)
         if not is_dup_valid:
-            print(f"Found Duplicates in {self.file_name} → {count_dup}")
+            all_quarantined = pd.concat([all_quarantined, rejected_dup]) 
 
 
         #Format Validation
         is_formats_valid, format_clean_df , rejected_formats = self.validate_formats(no_dup_df)
         if not is_formats_valid:
             all_quarantined = pd.concat([all_quarantined, rejected_formats])
-            print(f"Some invalid formats in {self.file_name}")
-            print(rejected_formats.to_string())
 
         #Range Validation
         is_range_valid , valid_df , rejected_ranges = self.validate_value_ranges(format_clean_df)
         if not is_range_valid:
             all_quarantined = pd.concat([all_quarantined, rejected_ranges])
-            print("Some Ranges invalid")
-            print(rejected_ranges.to_string())
 
 
         if not all_quarantined.empty:
             all_quarantined = all_quarantined.drop_duplicates()
             
 
-        print(f"Valid Rows: {valid_df.shape[0]}, Quarantined Rows: {all_quarantined.shape[0]}")
         return valid_df , all_quarantined
 
 
@@ -94,12 +88,19 @@ class stream_records_validator():
         count_nulls = nulls_df.shape[0]
         
         if nulls_df.empty:
-            return True , df , count_nulls , nulls_df
+            return True , df, None
         
-        logger.error(f"Found {count_nulls} Nulls in  {self.file_name}:")
+         # Get columns that have null values
+        columns_with_nulls = df.columns[df.isnull().any()].tolist()
+        
+        print(f"Found Nulls in {self.file_name} → {count_nulls}")
+        logger.error(f"Found {count_nulls} Nulls in  {self.file_name}",
+                     extra = {
+                         "columns_with_nulls": columns_with_nulls
+                         })
         #move_to_quarantine(nulls_df , "null values" , f"{self.file_name}")
         cleaned_df = df.dropna(subset=cols_to_check)
-        return False , cleaned_df, count_nulls , nulls_df
+        return False , cleaned_df, nulls_df
 
 
     def validate_duplicates(self, df , pk):
@@ -111,12 +112,13 @@ class stream_records_validator():
         count_duplicates = duplicated_rows.shape[0]
 
         if duplicated_rows.empty:
-            return True , df , count_duplicates
+            return True , df, None
         
-        logger.error(f"Found {count_duplicates} duplicates in  {self.file_name}:")
+        print(f"Found duplicates in {self.file_name} → {count_duplicates}")
+        logger.error(f"Found {count_duplicates} duplicates in  {self.file_name}")
         #move_to_quarantine(duplicated_rows , "duplicated rows" , f"{self.file_name}")
         cleaned_df = df.drop_duplicates(subset=[pk])
-        return False , cleaned_df , count_duplicates
+        return False , cleaned_df , duplicated_rows
     
 
 
@@ -138,6 +140,7 @@ class stream_records_validator():
 
 
         if not all_rejected_rows.empty:
+            print(f"Found invalid formats in {self.file_name} → {all_rejected_rows.shape[0]}")
             all_rejected_rows = all_rejected_rows.drop_duplicates()
             #move_to_quarantine(all_rejected_rows , "invalid formats", f"{self.file_name}")
             cleaned_df = df.drop(all_rejected_rows.index)
