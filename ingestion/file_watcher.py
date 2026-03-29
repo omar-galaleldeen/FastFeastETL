@@ -9,7 +9,7 @@ from queue import Queue
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from ingestion.file_tracker import is_processed
+
 from config.config_loader import get_config
 from utils.logger import get_logger
 
@@ -18,11 +18,11 @@ logger = get_logger(__name__)
 # ─── Load config once at module level ────────────────────────────────────────
 
 _cfg         = get_config()
-BATCH_FILES:  list[str] = _cfg["watcher"]["batch"]["expected_files"]
-STREAM_FILES: list[str] = _cfg["watcher"]["stream"]["expected_files"]
+BATCH_FILES:  list[str] = list(_cfg["watcher"]["batch"]["expected_files"].keys())
+STREAM_FILES: list[str] = list(_cfg["watcher"]["stream"]["expected_files"].keys())
 
 
-# ─── Stream handler (watchdog) ────────────────────────────────────────────────
+# ─── Stream handler (watchdog) ───────────────────────────────────────────────
 
 class StreamEventHandler(FileSystemEventHandler):
     """
@@ -40,13 +40,11 @@ class StreamEventHandler(FileSystemEventHandler):
             return
 
         path = Path(event.src_path)
-        print("EVENT:", event.src_path)
-        
+
         if path.name not in STREAM_FILES:
-            return                      # silently ignore unexpected files
+            return                          # silently ignore unexpected files
 
-
-        self.file_queue.put(path)       # non-blocking, thread-safe
+        self.file_queue.put(path)           # non-blocking, thread-safe
 
 
 # ─── Stream thread ────────────────────────────────────────────────────────────
@@ -76,26 +74,28 @@ class StreamWatcherThread(threading.Thread):
 
         logger.info("[stream] observer started")
 
-        try:
-            while not self._stop_event.is_set():    ## Keep the thread alive
-                time.sleep(1)
-        finally:
-            observer.stop() # Stop the observer when the thread is stopping
-            observer.join() # Wait for the observer thread to finish before exiting
+        # _stop_event.wait() blocks here until stop() sets the event.
+        # much cleaner than while + time.sleep(1) loop —
+        # thread wakes up immediately when stop() is called,
+        # not after waiting out the sleep interval.
+        self._stop_event.wait()
+
+        observer.stop()
+        observer.join()
 
         logger.info("[stream] observer stopped")
 
     def stop(self) -> None:
-        self._stop_event.set()
+        self._stop_event.set()          # unblocks wait() immediately
 
 
-# ─── Batch thread  
+# ─── Batch thread ─────────────────────────────────────────────────────────────
 
 class BatchWatcherThread(threading.Thread):
     """
-    Daemon thread — polls once per day at trigger_hour.
-    Resolves today's dated subfolder: data/input/batch/YYYY-MM-DD/
-    Uses flat glob — dated folder has no subfolders.
+    Daemon thread — scans once per day at trigger_hour.
+    Uses _stop_event.wait(timeout=30) instead of time.sleep(30) —
+    thread responds to stop() immediately rather than waiting out the sleep.
     Only logs on start and stop.
     """
 
@@ -110,40 +110,53 @@ class BatchWatcherThread(threading.Thread):
         self.file_queue   = file_queue
         self.trigger_hour = trigger_hour
         self._stop_event  = threading.Event()
+        self._scanned_today: str = ""   # tracks which date was already scanned
 
     def run(self) -> None:
         logger.info("[batch] watcher started")
 
         while not self._stop_event.is_set():
-            now = time.localtime()
-            if now.tm_hour == self.trigger_hour and now.tm_min == 0:
-                self._scan()
-                time.sleep(60)          # avoid double-scan within same minute
-            time.sleep(30)              # check clock every 30s      
+            now      = time.localtime()
+            today    = str(date.today())
+            at_hour  = now.tm_hour == self.trigger_hour
 
+            # scan only if:
+            #   - we are at the trigger hour
+            #   - we haven't already scanned today
+            if at_hour and self._scanned_today != today:
+                self._scan()
+                self._scanned_today = today     # mark today as scanned
+
+            # wait(timeout=30):
+            #   - if stop() is called → event is set → wait() returns True immediately
+            #   - if not stopped      → wait() returns False after 30s
+            # either way we loop back and check the clock again
+            self._stop_event.wait(timeout=30)
 
         logger.info("[batch] watcher stopped")
 
     def _scan(self) -> None:
-        # resolve today's dated subfolder e.g. data/input/batch/2026-02-22/
         today_dir = self.batch_dir / str(date.today())
 
         if not today_dir.exists():
-            return                      # folder not dropped yet — do nothing
+            logger.warning(f"[batch] today_dir not found: {today_dir}")
+            return
 
-        # flat glob — no subfolders inside dated batch folder
         found = (
             sorted(today_dir.glob("*.csv")) +
             sorted(today_dir.glob("*.json"))
         )
 
-        # queue only files that match expected names and aren't processed yet
+        queued = 0
         for f in found:
             if f.name in BATCH_FILES :
                 self.file_queue.put(f)
+                queued += 1
+
+        logger.info(f"[batch] scan done — {queued} file(s) queued from {today_dir}")
 
     def stop(self) -> None:
-        self._stop_event.set()
+        self._stop_event.set()          # unblocks wait(timeout=30) immediately
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
