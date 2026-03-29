@@ -22,15 +22,12 @@ class orphan_validator:
         if not is_orphan_valid:
             print(f"Found {orphan_df.shape[0]} Orphans in {self.file_name} & moving to quarantine")
             #self.track_orphans_for_quality(orphan_df)
-            print(orphan_df.to_string())
-            print(f'Valid Rows: {valid_df.shape[0]}, Quarantined Rows: {orphan_df.shape[0]}') 
-            #return False, valid_df, orphan_df
 
         reference_tables = ['orders' , 'tickets']
         if self.file_name in reference_tables:
             self.update_reference_table(valid_df)
 
-        #return True , valid_df , None
+        return valid_df , orphan_df
 
     def update_reference_table(self, df):
         """

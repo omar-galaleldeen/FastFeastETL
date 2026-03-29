@@ -18,29 +18,22 @@ class schema_validator():
         Run schema validation - validates columns, datatypes, and null constraints.
         Returns True if valid, False if invalid (but logs errors instead of crashing)
         """
-        records_ingested = str(self.df.shape[0])
-        print(f"Records Ingested : {records_ingested}")
-        
         #Structure Validation , File Level
         if not self.validate_columns(self.df, self.expected_schema):
-            print("Didn't Pass Columns Validation")
             logger.error(f"Schema validation failed in {self.file_name} -> Didn't Pass Columns Validation")
             self._handle_validation_failure("Required Columns don't exist")
-            return False , None , None
+            return False , None , self.df
         
-        print("Columns Validation Done")
+        all_rejections = pd.DataFrame()
 
         valid_dt_df, rejected_df_1 = self.validate_datatypes(self.df, self.expected_schema)
-
         valid_n_df, rejected_df_2 = self.validate_nulls(valid_dt_df, self.expected_schema)
-
         all_valid, rejected_df_3 = self.validate_categorical(valid_n_df, self.expected_schema)
 
-        rejected_df = pd.concat([rejected_df_1, rejected_df_2, rejected_df_3]).drop_duplicates()
+        all_rejections = pd.concat([rejected_df_1, rejected_df_2, rejected_df_3]).drop_duplicates()
 
-        print("Schema Row Validation Done")
 
-        return True, all_valid, rejected_df
+        return True, all_valid, all_rejections
     
             
     def _handle_validation_failure(self , message:str) -> None:
@@ -93,7 +86,8 @@ class schema_validator():
 
                 bad = df[~mask]
                 good = df[mask].copy()
-                good[col] = converted[mask]
+                if not bad.empty:
+                    good[col] = converted[mask]
 
             else:
                 try:
@@ -107,8 +101,8 @@ class schema_validator():
             
             if not bad.empty:
                 logger.error(f"{col} has invalid datatype rows: {len(bad)}")
-                self._handle_validation_failure(f"Found {len(bad)} invalid datatypes")
                 rejected_rows = pd.concat([rejected_rows, bad])
+                self._handle_validation_failure(f"Found {len(bad)} invalid datatypes")
 
             df = good
 
@@ -134,6 +128,8 @@ class schema_validator():
                 rejected_rows = pd.concat([rejected_rows, bad])
             
             df = good 
+            
+        rejected_rows = rejected_rows.drop_duplicates()
                 
         return df , rejected_rows
     
