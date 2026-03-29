@@ -5,3 +5,5 @@
 *.log
 *.tmp
 *test_*.py
+*__pycache__/
+*.db
