@@ -57,7 +57,8 @@ class validation_runner:
             print(f"Schema validation failed completely in {self.original_file_name}")
             # Use safe file type fallback to prevent directory error if something goes wrong
             safe_file_type = self.file_type if self.file_type else "unknown"
-            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)            processed_timestamp = datetime.now().isoformat(sep=" ")
+            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)            
+            processed_timestamp = datetime.now().isoformat(sep=" ")
             return False, clean_df, self.original_file_name, processed_timestamp
 
         # If some records failed schema but others are fine

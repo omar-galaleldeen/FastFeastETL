@@ -47,17 +47,18 @@ def _send_email(error: str, message: str) -> None:
         This is an automated alert from your system.
         """
          
-        message = MIMEMultipart()
-        message["From"] = sender
-        message["To"] = ", ".join(receivers)
-        message["Subject"] = subject
-
-        message.attach(MIMEText(body, "plain"))
+       # Use a distinct variable name (email_msg) to avoid shadowing the 'message' parameter
+        email_msg = MIMEMultipart()
+        email_msg["From"] = sender
+        email_msg["To"] = ", ".join(receivers)
+        email_msg["Subject"] = subject
+        email_msg.attach(MIMEText(body, "plain"))
 
         with SMTP(host, port) as smtp:
             smtp.starttls()
             smtp.login(user_name, password)
-            smtp.sendmail(sender , receivers , message)
-
+            smtp.send_message(email_msg)
+            logger.info("Alert email sent successfully.")
+            
     except Exception as e:
         logger.error(f"Sending Alert Failed: {e}")
