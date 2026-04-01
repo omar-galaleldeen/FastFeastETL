@@ -6,6 +6,7 @@ from validation import stream_records_validator as srv
 from validation import orphan_validator as ov
 from validation import schema_registry as sr
 from validation.fault_handler import fault_handler
+from validation.pii_handler import pii_handler 
 from config.config_loader import get_config
 from utils.logger import get_logger
 
@@ -98,8 +99,12 @@ class validation_runner:
 
         logger.info(f"Validation Ended for {self.file_name}")
         
+        # 3. PII Handling (Masking sensitive data before DWH handoff)
+        pii_processor = pii_handler()
+        secured_records_df = pii_processor.mask_pii(valid_records_df, self.file_name)
+
         # Generate the processing timestamp for the DWH layer
         processed_timestamp = datetime.now().isoformat(sep=" ")
 
-        # Return status, the clean dataframe, the file name, and the timestamp as separate variables
-        return True, valid_records_df, self.file_name, processed_timestamp
+        # Return status, the SECURED dataframe, the file name, and the timestamp
+        return True, secured_records_df, self.file_name, processed_timestamp
