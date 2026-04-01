@@ -101,7 +101,12 @@ class validation_runner:
         
         # 3. PII Handling (Masking sensitive data before DWH handoff)
         pii_processor = pii_handler()
-        secured_records_df = pii_processor.mask_pii(valid_records_df, self.file_name)
+        
+        # ADDED: Check if dataframe is not None before masking to satisfy type checker
+        if valid_records_df is not None:
+            secured_records_df = pii_processor.mask_pii(valid_records_df, self.file_name)
+        else:
+            secured_records_df = valid_records_df
 
         # Generate the processing timestamp for the DWH layer
         processed_timestamp = datetime.now().isoformat(sep=" ")
