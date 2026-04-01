@@ -60,4 +60,4 @@ def _send_email(error: str, message: str) -> None:
             smtp.sendmail(sender , receivers , message)
 
     except Exception as e:
-        logger.error("Sending Alert Failed", error=str(e))
+        logger.error(f"Sending Alert Failed: {e}")

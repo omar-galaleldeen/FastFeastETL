@@ -78,7 +78,7 @@ logging:
   dir: "logs"  
 
 alerting:
-  enabled: true
+  enabled: false
 
   smtp_host: smtp.gmail.com
   smtp_port: 587

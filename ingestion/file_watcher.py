@@ -171,6 +171,10 @@ def start() -> tuple[Queue[Path], BatchWatcherThread, StreamWatcherThread]:
     stream_dir   = Path(_cfg["watcher"]["stream"]["dir"])
     trigger_hour = int(_cfg["watcher"]["batch"]["trigger_hour"])
 
+    # ADDED: Ensure directories exist before watching them
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    stream_dir.mkdir(parents=True, exist_ok=True)
+
     file_queue: Queue[Path] = Queue()
 
     batch_thread  = BatchWatcherThread(batch_dir,  file_queue, trigger_hour)
@@ -180,7 +184,6 @@ def start() -> tuple[Queue[Path], BatchWatcherThread, StreamWatcherThread]:
     stream_thread.start()
 
     return file_queue, batch_thread, stream_thread
-
 
 def stop(
     batch_thread:  BatchWatcherThread,
