@@ -4,7 +4,7 @@ from validation import batch_records_validator as brv
 from validation import stream_records_validator as srv
 from validation import orphan_validator as ov
 from validation import schema_registry as sr
-from validation.fault_handler import fault_handler
+from validation.fault_hander import fault_handler
 from config.config_loader import get_config
 from utils.logger import get_logger
 
