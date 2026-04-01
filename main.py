@@ -1,7 +1,38 @@
-from ingestion.ingestion_runner import start, stop
+import sys
+import logging
+from utils.logger import get_logger
+from ingestion import ingestion_runner
 
-try:
-    start()   
-except KeyboardInterrupt:
-    print("Stopping...")
-    stop() 
+# Initialize root logger
+logger = get_logger(__name__)
+
+def main():
+    logger.info("Starting FastFeast ETL Pipeline...")
+    print("=====================================================")
+    print("🚀 FastFeast Pipeline is running! Waiting for files...")
+    print("Press Ctrl+C to stop the pipeline gracefully.")
+    print("=====================================================\n")
+
+    try:
+        # This will block the main thread and run the continuous ingestion loop
+        ingestion_runner.start()
+        
+    except KeyboardInterrupt:
+        # Graceful shutdown when you press Ctrl+C in the terminal
+        print("\n🛑 Stop signal received (Ctrl+C).")
+        logger.info("KeyboardInterrupt received. Initiating graceful shutdown...")
+        
+    except Exception as e:
+        # Catch any catastrophic failure that escaped the runner
+        print(f"\n❌ Critical Error: {e}")
+        logger.critical(f"Critical pipeline failure: {e}")
+        
+    finally:
+        # Ensure watcher threads and tracker DB are closed cleanly
+        print("Shutting down background threads... please wait.")
+        ingestion_runner.stop()
+        logger.info("Pipeline stopped successfully.")
+        print("👋 Pipeline stopped. Goodbye!")
+
+if __name__ == "__main__":
+    main()

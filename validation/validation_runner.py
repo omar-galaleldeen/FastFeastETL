@@ -6,7 +6,7 @@ from validation import stream_records_validator as srv
 from validation import orphan_validator as ov
 from validation import schema_registry as sr
 from validation.fault_handler import fault_handler
-from validation.pii_handler import pii_handler 
+from validation.pii_handler import pii_handler
 from config.config_loader import get_config
 from utils.logger import get_logger
 
@@ -15,32 +15,27 @@ _cfg         = get_config()
 BATCH_FILES:  dict = _cfg["watcher"]["batch"]["expected_files"]
 STREAM_FILES: dict = _cfg["watcher"]["stream"]["expected_files"]
 
-def exists(file_name, files_dict):
-    return any(os.path.splitext(f)[0] == file_name for f in files_dict)
-
-#=======================================================================================#
 class validation_runner:
     def __init__(self, parsed_df, file_name):
         self.df = parsed_df
-        self.file_name = file_name
+        self.original_file_name = file_name                       # e.g., "orders.json"
+        self.file_name = os.path.splitext(file_name)[0].lower()   # e.g., "orders"
         self.file_type = None
 
         self.records_ingested = len(self.df)
 
-        if exists(self.file_name, BATCH_FILES):
+        # Determine file_type checking the original file name against the config keys
+        if self.original_file_name in BATCH_FILES:
             self.file_type = "batch"
-            
-        elif exists(self.file_name, STREAM_FILES):
+        elif self.original_file_name in STREAM_FILES:
             self.file_type = "stream"
 
         schema_registry_obj = sr.schema_registry()
         self.expected_schema = schema_registry_obj.get_schema(self.file_name)
 
-
     def run(self):
-
         logger.info(
-            f"Validation started for {self.file_name}",
+            f"Validation started for {self.original_file_name}",
             extra={
                 "record_count": self.records_ingested,
                 "file_type": self.file_type
@@ -50,23 +45,25 @@ class validation_runner:
         # Initialize the fault handler
         fh = fault_handler()
 
-        print(f"Records Ingested: {self.records_ingested} in {self.file_name}")
+        print(f"Records Ingested: {self.records_ingested} in {self.original_file_name}")
         
         # 1. Schema Validation
         schema_validation = sv.schema_validator(self.df, self.expected_schema , self.file_name)
         schema_valid, clean_df, rejected_df = schema_validation.run()
 
-        # If schema is completely invalid, quarantine the whole thing 
+        # If schema is completely invalid, quarantine the whole thing and stop
         if not schema_valid:
-            print(f"Schema validation failed completely in {self.file_name}")
-            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", f"{self.file_type}")
+            print(f"Schema validation failed completely in {self.original_file_name}")
+            # Use safe file type fallback to prevent directory error if something goes wrong
+            safe_file_type = self.file_type if self.file_type else "unknown"
+            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", safe_file_type)
             processed_timestamp = datetime.now().isoformat(sep=" ")
-            return False, clean_df, self.file_name, processed_timestamp
+            return False, clean_df, self.original_file_name, processed_timestamp
 
         # If some records failed schema but others are fine
         if not rejected_df.empty:
             print(f"Records failed in schema validation: {rejected_df.shape[0]}")
-            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", f"{self.file_type}")
+            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)
 
         valid_records_df = clean_df
 
@@ -97,14 +94,17 @@ class validation_runner:
 
             valid_records_df = final_stream_valid_df
 
-        logger.info(f"Validation Ended for {self.file_name}")
+        logger.info(f"Validation Ended for {self.original_file_name}")
         
-        # 3. PII Handling (Masking sensitive data before DWH handoff)
+        # 3. PII Handling
         pii_processor = pii_handler()
-        secured_records_df = pii_processor.mask_pii(valid_records_df, self.file_name)
+        if valid_records_df is not None:
+            secured_records_df = pii_processor.mask_pii(valid_records_df, self.file_name)
+        else:
+            secured_records_df = valid_records_df
 
         # Generate the processing timestamp for the DWH layer
         processed_timestamp = datetime.now().isoformat(sep=" ")
 
-        # Return status, the SECURED dataframe, the file name, and the timestamp
-        return True, secured_records_df, self.file_name, processed_timestamp
+        # Return status, the clean dataframe, the file name, and the timestamp as separate variables
+        return True, secured_records_df, self.original_file_name, processed_timestamp

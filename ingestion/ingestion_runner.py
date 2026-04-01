@@ -162,9 +162,9 @@ def stop() -> None:
 
     _stop_evt.set()
 
-    file_watcher.stop(_batch_thread, _stream_thread)
+    # ADDED: Check if threads exist before trying to stop them to satisfy type checker
+    global _batch_thread, _stream_thread
+    if _batch_thread is not None and _stream_thread is not None:
+        file_watcher.stop(_batch_thread, _stream_thread)
+        
     file_tracker.stop()
-
-# ─── thread handles (set by start())  
-_batch_thread  = None
-_stream_thread = None
