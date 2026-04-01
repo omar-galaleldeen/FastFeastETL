@@ -39,8 +39,8 @@ class StreamEventHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = Path(event.src_path)
-
+# Force the path to be a string to satisfy type checker
+        path = Path(str(event.src_path))
         if path.name not in STREAM_FILES:
             return                          # silently ignore unexpected files
 

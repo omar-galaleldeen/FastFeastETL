@@ -87,7 +87,7 @@ class orphan_validator:
 
                     if not cursor.fetchone():
                         logger.warning(f"Reference table {ref_table} not found in DB, skipping FK check for {col}")
-                        orphans = df.copy()
+                        continue   # BUG FIX: was `orphans = df.copy()` which quarantined ALL records
 
                     else:
                         ref_ids = pd.read_sql_query(f"SELECT id FROM {ref_table}", conn)

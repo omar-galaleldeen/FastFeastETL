@@ -18,6 +18,11 @@ logger = get_logger(__name__)
 _cfg      = get_config()
 _stop_evt = threading.Event()
 
+# BUG FIX: initialize thread handles at module level so stop() never raises NameError
+# if called before start() (e.g. during a crash at startup)
+_batch_thread:  threading.Thread | None = None
+_stream_thread: threading.Thread | None = None
+
 # built once from config — {filename: {"table": "Dim_X"}}
 _ALL_FILES: dict = {
     **_cfg["watcher"]["batch"]["expected_files"],
@@ -51,7 +56,7 @@ def _process_file(path: Path) -> None:
         logger.error(f"[runner] file_tracker check failed for {filename}: {e}")
         return
  
-    # step 4: read file 
+    # step 3: read file  (step was missing from comment numbering — BUG FIX)
     try:
         df, file_type = read_file(path)
         logger.info(
@@ -73,7 +78,7 @@ def _process_file(path: Path) -> None:
         send_alert(error="Parse Failure", message=f"Failed to parse {filename}: {str(e)}")
         return
 
-    # step 5: hand off to validation layer (WRAPPED IN SAFETY NET)
+    # step 4: hand off to validation layer (WRAPPED IN SAFETY NET)
     try:
         validator = validation_runner(df, filename)
         
@@ -89,7 +94,7 @@ def _process_file(path: Path) -> None:
 
         records_loaded = len(clean_df) if clean_df is not None else 0
         
-        # ── step 5.5: hand off to DWH layer ──
+        # ── step 4.5: hand off to DWH layer ──
         # Your DWH colleague will plug their code here, for example:
         # from warehouse.postgres_loader import load_data
         # load_data(clean_df, out_filename, processed_ts)
@@ -101,7 +106,7 @@ def _process_file(path: Path) -> None:
         send_alert(error="Pipeline Exception", message=error_msg)
         return
 
-    # step 6: mark done  
+    # step 5: mark done  
     file_tracker.mark_as_done(file_path, file_hash, records_loaded)
     logger.info(
         f"[runner] done — {filename} | "
