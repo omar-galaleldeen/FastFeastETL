@@ -86,8 +86,7 @@ class schema_validator():
 
                 bad = df[~mask]
                 good = df[mask].copy()
-                if not bad.empty:
-                    good[col] = converted[mask]
+                good[col] = converted[mask]   # BUG FIX: always apply conversion, not only when bad rows exist
 
             else:
                 try:
