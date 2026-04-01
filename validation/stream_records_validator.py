@@ -99,7 +99,7 @@ class stream_records_validator():
                          "columns_with_nulls": columns_with_nulls
                          })
         #move_to_quarantine(nulls_df , "null values" , f"{self.file_name}")
-        cleaned_df = df.dropna(subset=cols_to_check)
+        cleaned_df = df.dropna(subset=cols_to_check).copy()  # .copy() prevents SettingWithCopyWarning
         return False , cleaned_df, nulls_df
 
 
@@ -117,7 +117,7 @@ class stream_records_validator():
         print(f"Found duplicates in {self.file_name} → {count_duplicates}")
         logger.error(f"Found {count_duplicates} duplicates in  {self.file_name}")
         #move_to_quarantine(duplicated_rows , "duplicated rows" , f"{self.file_name}")
-        cleaned_df = df.drop_duplicates(subset=[pk])
+        cleaned_df = df.drop_duplicates(subset=[pk]).copy()  # .copy() prevents SettingWithCopyWarning
         return False , cleaned_df , duplicated_rows
     
 
@@ -143,7 +143,7 @@ class stream_records_validator():
             print(f"Found invalid formats in {self.file_name} → {all_rejected_rows.shape[0]}")
             all_rejected_rows = all_rejected_rows.drop_duplicates()
             #move_to_quarantine(all_rejected_rows , "invalid formats", f"{self.file_name}")
-            cleaned_df = df.drop(all_rejected_rows.index)
+            cleaned_df = df.drop(all_rejected_rows.index).copy()  # .copy() prevents SettingWithCopyWarning
             return False, cleaned_df , all_rejected_rows
         
 
