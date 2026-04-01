@@ -184,15 +184,25 @@ class schema_validator():
     
     def validate_categorical(self, df , expected_schema):
         """
-        Validate categorical columns against allowed values
+        Validate categorical columns against allowed values.
+        
+        Treats null-equivalent strings ("None", "nan", "") as null values —
+        these are valid for nullable categorical columns (e.g. old_status on
+        the first ticket_event always has old_status=None from the generator).
+        Without this fix, exactly 1/3 of ticket_events fail schema validation
+        because every ticket creation event has old_status=None → "None" string
+        → rejected as invalid categorical value.
         """
+        NULL_STRINGS = {"None", "nan", "NaN", "NaT", ""}
         rejected_rows = pd.DataFrame()
         categorical_cols = expected_schema.get_categorical_columns()
 
         for column in categorical_cols:
             col_name = column.name
             allowed_values = column.allowed_values
-            mask = df[col_name].isin(allowed_values) | df[col_name].isna()
+            # Treat null-equivalent strings the same as NaN — valid for nullable cols
+            is_null_equivalent = df[col_name].isin(NULL_STRINGS)
+            mask = df[col_name].isin(allowed_values) | df[col_name].isna() | is_null_equivalent
 
             bad = df[~mask]
             good = df[mask]
