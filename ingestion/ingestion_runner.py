@@ -6,9 +6,12 @@ from queue import Queue
 from time import sleep
 
 from config.config_loader import get_config
-from ingestion import  file_tracker, file_watcher
+from ingestion import file_tracker, file_watcher
 from ingestion.file_reader import read_file
 from utils.logger import get_logger
+
+from utils.alerter import send_alert
+from validation.validation_runner import validation_runner
 
 logger = get_logger(__name__)
 
@@ -21,27 +24,24 @@ _ALL_FILES: dict = {
     **_cfg["watcher"]["stream"]["expected_files"],
 }
 
-
 # File processing  
 def _process_file(path: Path) -> None:
     """
     Full ingestion pipeline for a single file.
     Never raises — every error is caught, logged, and skipped.
-   
     """
     file_path = str(path)
     filename  = path.name
 
-
-
     sleep(0.5)   # simulate some processing time
+    
     # step 1: hash  
     try:
-        file_hash =  file_tracker.compute_hash(file_path)
+        file_hash = file_tracker.compute_hash(file_path)
     except Exception as e:
         logger.error(f"[runner] failed to hash {filename}: {e}")
         return
-
+    
     # step 2: idempotency check  
     try:
         if file_tracker.is_processed(file_path, file_hash):
@@ -51,7 +51,6 @@ def _process_file(path: Path) -> None:
         logger.error(f"[runner] file_tracker check failed for {filename}: {e}")
         return
  
-
     # step 4: read file 
     try:
         df, file_type = read_file(path)
@@ -64,74 +63,58 @@ def _process_file(path: Path) -> None:
         # unknown file name or unsupported format
         logger.error(f"[runner] read error (invalid file): {e}")
         file_tracker.mark_as_failed(file_path, file_hash, str(e))
+        send_alert(error="Invalid File Error", message=f"Failed to read {filename}: {str(e)}")
         return
 
     except Exception as e:
         # IO error, encoding error, malformed CSV/JSON
         logger.error(f"[runner] read error (parse failed): {filename} — {e}")
         file_tracker.mark_as_failed(file_path, file_hash, str(e))
-       # _send_alert("Parse failure", filename, str(e))
+        send_alert(error="Parse Failure", message=f"Failed to parse {filename}: {str(e)}")
         return
-    # TODO: plug in validation layer here before loading
-    # ── step 5: hand off to validation layer  
-    # validation_runner receives df, file_type 
-    # and returns (clean_df, records_loaded) or raises
-    # try:
-    #     from validation.validator_orchestrator import run as validate
-    #     clean_df, records_loaded = validate(df, file_type )
 
-    # except Exception as e:
-    #     logger.error(f"[runner] validation failed: {filename} — {e}")
-    #     file_tracker.mark_as_failed(file_path, file_hash, str(e))
-    #    # _send_alert("Validation failure", filename, str(e))
-    #     return
+    # step 5: hand off to validation layer (WRAPPED IN SAFETY NET)
+    try:
+        validator = validation_runner(df, filename)
+        
+        # Unpack the 4 returned variables specifically requested for DWH
+        is_valid, clean_df, out_filename, processed_ts = validator.run()
 
+        if not is_valid:
+            error_msg = f"Schema validation failed completely for {filename}"
+            logger.error(f"[runner] {error_msg}")
+            file_tracker.mark_as_failed(file_path, file_hash, error_msg)
+            send_alert(error="Validation Critical Failure", message=error_msg)
+            return
 
-    # step 4: DRY RUN
-    logger.info(
-        f"[runner] DRY RUN — "
-        f"file={filename} | "
-        f"type={file_type} | "
-        f"rows={len(df)} | "
-        f"columns={list(df.columns)}"
-    )
-    records_loaded = len(df)
+        records_loaded = len(clean_df) if clean_df is not None else 0
+        
+        # ── step 5.5: hand off to DWH layer ──
+        # Your DWH colleague will plug their code here, for example:
+        # from warehouse.postgres_loader import load_data
+        # load_data(clean_df, out_filename, processed_ts)
 
-    # ── step 6: mark done  
+    except Exception as e:
+        error_msg = f"Unexpected error during validation of {filename}: {str(e)}"
+        logger.error(f"[runner] {error_msg}")
+        file_tracker.mark_as_failed(file_path, file_hash, str(e))
+        send_alert(error="Pipeline Exception", message=error_msg)
+        return
+
+    # step 6: mark done  
     file_tracker.mark_as_done(file_path, file_hash, records_loaded)
     logger.info(
         f"[runner] done — {filename} | "
         f"{records_loaded} records passed validation"
     )
 
-
-
-
-
-# Alert helper  
-
-# def _send_alert(subject: str, filename: str, error: str) -> None:
-#     """Sends async alert — never blocks the pipeline."""
-#     try:
-#         from utils.alerter import send_async
-#         send_async(
-#             subject = f"[FastFeast] {subject}: {filename}",
-#             body    = error,
-#         )
-#     except Exception:
-#         pass    # alerter failure must never affect the pipeline
-
-
 # Main loop 
-
 def _run_loop(file_queue: Queue[Path]) -> None:
     """
     Drains the file queue forever.
-    Blocked on queue.get() when idle but otherwise non-blocking — the processing is done in-memory and
+    Blocked on queue.get() when idle but otherwise non-blocking.
     Stops cleanly when _stop_evt is set and queue is empty.
     """
-     
-
     while not _stop_evt.is_set():
         try:
             # timeout so we can check _stop_evt regularly
@@ -145,8 +128,9 @@ def _run_loop(file_queue: Queue[Path]) -> None:
             # last-resort catch — _process_file should never raise
             # but if it does the loop must survive
             logger.error(f"[runner] unexpected error: {e}")
+            send_alert(error="Critical Loop Error", message=f"Main loop caught an unhandled exception: {str(e)}")
 
- 
+
 # Public API  
 def start() -> None:
     """
@@ -181,8 +165,6 @@ def stop() -> None:
     file_watcher.stop(_batch_thread, _stream_thread)
     file_tracker.stop()
 
-
 # ─── thread handles (set by start())  
-
 _batch_thread  = None
 _stream_thread = None
