@@ -72,32 +72,78 @@ class schema_validator():
         return True
     
     
-    def validate_datatypes(self,df , expected_schema):
+    def validate_datatypes(self, df, expected_schema):
         """
-        Validate that each column has the expected datatype
+        Validate that each column has the expected datatype.
+
+        ROOT CAUSE FIX:
+        file_reader reads everything as str (dtype=str for CSV, .astype(str) for JSON).
+        This means JSON null → Python None → string "None", and NaN → "nan".
+        The old code did astype(expected_dtype) which failed on "None", then fell into
+        isinstance(x, eval(dtype)) — but isinstance("12345", int) is ALWAYS False
+        because every value is a string. One null in a column = ALL rows rejected.
+
+        Fix: use pd.to_numeric / pd.to_datetime with errors='coerce', and only reject
+        rows whose value was not null-equivalent but still couldn't be converted.
+        Null-equivalent strings ("None", "nan", "") are passed through so that
+        validate_nulls can enforce NOT NULL constraints per the schema.
         """
+        # Strings that represent null after file_reader's astype(str)
+        NULL_STRINGS = {"None", "nan", "NaN", "NaT", ""}
+
+        BOOL_TRUE  = {"True", "true", "1"}
+        BOOL_FALSE = {"False", "false", "0"}
+
         rejected_rows = pd.DataFrame()
-        
+
         for col in df.columns:
             expected_dtype = expected_schema.get_column(col).dtype
-            if expected_dtype == 'datetime':
-                converted = pd.to_datetime(df[col] , errors = 'coerce')
-                mask = converted.notna()
 
-                bad = df[~mask]
-                good = df[mask].copy()
-                good[col] = converted[mask]   # BUG FIX: always apply conversion, not only when bad rows exist
+            # Rows whose raw value is null-equivalent — let validate_nulls handle them
+            null_mask = df[col].isna() | df[col].isin(NULL_STRINGS)
+            non_null  = ~null_mask
+
+            if expected_dtype == "str":
+                # Already strings — nothing to convert, never reject
+                bad  = pd.DataFrame()
+                good = df.copy()
+
+            elif expected_dtype == "datetime":
+                # Replace null strings with NaT so pd.to_datetime treats them as missing
+                series    = df[col].where(non_null, other=pd.NaT)
+                converted = pd.to_datetime(series, errors="coerce")
+                # Bad = had a real value but conversion produced NaT (unreadable format)
+                invalid_mask = non_null & converted.isna()
+                bad  = df[invalid_mask]
+                good = df[~invalid_mask].copy()
+                good[col] = converted[~invalid_mask]   # store actual datetime dtype
+
+            elif expected_dtype in ("int", "float"):
+                # Replace null strings with NaN so pd.to_numeric treats them as missing
+                series    = df[col].where(non_null, other=pd.NA)
+                converted = pd.to_numeric(series, errors="coerce")
+                # Bad = had a real value but couldn't parse as number (e.g. "abc")
+                invalid_mask = non_null & converted.isna()
+                bad  = df[invalid_mask]
+                good = df[~invalid_mask].copy()
+                good[col] = converted[~invalid_mask]
+
+            elif expected_dtype == "bool":
+                valid_bool = BOOL_TRUE | BOOL_FALSE
+                # Bad = had a real value but not a recognised bool string
+                invalid_mask = non_null & ~df[col].isin(valid_bool)
+                bad  = df[invalid_mask]
+                good = df[~invalid_mask].copy()
+                # Convert valid bool strings to actual Python bools
+                good[col] = good[col].map(
+                    lambda x: True  if x in BOOL_TRUE  else
+                              False if x in BOOL_FALSE else x
+                )
 
             else:
-                try:
-                    good = df.copy()
-                    good[col] = good[col].astype(expected_dtype)
-                    bad = pd.DataFrame()
-                except:
-                    mask = df[col].apply(lambda x: isinstance(x, eval(expected_dtype)))
-                    bad = df[~mask]
-                    good = df[mask]
-            
+                bad  = pd.DataFrame()
+                good = df.copy()
+
             if not bad.empty:
                 logger.error(f"{col} has invalid datatype rows: {len(bad)}")
                 rejected_rows = pd.concat([rejected_rows, bad])
@@ -105,18 +151,22 @@ class schema_validator():
 
             df = good
 
-        return df,rejected_rows
+        return df, rejected_rows
     
 
     def validate_nulls(self, df , expected_schema):
         """
-        Validate that NOT NULL columns have no null values
+        Validate that NOT NULL columns have no null values.
+        Also treats null-equivalent strings ("None", "nan", "") as null,
+        because file_reader converts JSON null → "None" via astype(str).
         """
+        NULL_STRINGS = {"None", "nan", "NaN", "NaT", ""}
         rejected_rows = pd.DataFrame()
         not_null_cols = expected_schema.get_required_columns()
 
         for column in not_null_cols:
-            mask = df[column].notna()
+            # A value is null if it's NaN OR one of the null-equivalent strings
+            mask = df[column].notna() & ~df[column].isin(NULL_STRINGS)
 
             bad = df[~mask]
             good = df[mask]
