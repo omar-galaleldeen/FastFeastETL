@@ -192,12 +192,14 @@ class batch_records_validator():
         phone_cols = [col for col in df.columns if 'phone' in col.lower()]
         phone_regex_pattern = r'^01[0125]\d{8}$'
         for p_col in phone_cols:
+            rejected_phones = pd.DataFrame()   # BUG FIX: initialize per-iteration to prevent UnboundLocalError
+
             if is_string_dtype(df[p_col]):
                 rejected_mask= ~df[p_col].str.contains(phone_regex_pattern, na=False , regex=True)
                 rejected_phones= df[rejected_mask]
 
             elif is_integer_dtype(df[p_col]):
-                rejected_mask = df[p_col].astype(str).str.len() != 10
+                rejected_mask = df[p_col].astype(str).str.len() != 11  # BUG FIX: Egyptian numbers are 11 digits, not 10
                 rejected_phones= df[rejected_mask]
 
             if not rejected_phones.empty:
