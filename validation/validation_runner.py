@@ -1,10 +1,11 @@
 import os
+from datetime import datetime
 from validation import schema_validator as sv
 from validation import batch_records_validator as brv
 from validation import stream_records_validator as srv
 from validation import orphan_validator as ov
 from validation import schema_registry as sr
-from validation.fault_hander import fault_handler
+from validation.fault_handler import fault_handler
 from config.config_loader import get_config
 from utils.logger import get_logger
 
@@ -16,7 +17,7 @@ STREAM_FILES: dict = _cfg["watcher"]["stream"]["expected_files"]
 def exists(file_name, files_dict):
     return any(os.path.splitext(f)[0] == file_name for f in files_dict)
 
-
+#=======================================================================================#
 class validation_runner:
     def __init__(self, parsed_df, file_name):
         self.df = parsed_df
@@ -45,6 +46,7 @@ class validation_runner:
             }
         )
         
+        # Initialize the fault handler
         fh = fault_handler()
 
         print(f"Records Ingested: {self.records_ingested} in {self.file_name}")
@@ -53,11 +55,12 @@ class validation_runner:
         schema_validation = sv.schema_validator(self.df, self.expected_schema , self.file_name)
         schema_valid, clean_df, rejected_df = schema_validation.run()
 
-        # If schema is completely invalid, quarantine the whole thing
+        # If schema is completely invalid, quarantine the whole thing 
         if not schema_valid:
             print(f"Schema validation failed completely in {self.file_name}")
             fh.move_to_quarantine(rejected_df, "Records failed in schema validation", f"{self.file_type}")
-            return False, clean_df
+            processed_timestamp = datetime.now().isoformat(sep=" ")
+            return False, clean_df, self.file_name, processed_timestamp
 
         # If some records failed schema but others are fine
         if not rejected_df.empty:
@@ -94,6 +97,9 @@ class validation_runner:
             valid_records_df = final_stream_valid_df
 
         logger.info(f"Validation Ended for {self.file_name}")
+        
+        # Generate the processing timestamp for the DWH layer
+        processed_timestamp = datetime.now().isoformat(sep=" ")
 
-        # Return success status and the clean dataframe for the next layer (DWH loading)
-        return True, valid_records_df
+        # Return status, the clean dataframe, the file name, and the timestamp as separate variables
+        return True, valid_records_df, self.file_name, processed_timestamp
