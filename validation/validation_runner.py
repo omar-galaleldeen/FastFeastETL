@@ -20,19 +20,20 @@ class validation_runner:
         self.df = parsed_df
         self.original_file_name = file_name                       # e.g., "orders.json"
         self.file_name = os.path.splitext(file_name)[0].lower()   # e.g., "orders"
-        self.file_type = None
+        
+        # Safe fallback
+        self.file_type = "unknown"
 
         self.records_ingested = len(self.df)
 
-        # Determine file_type checking the original file name against the config keys
-        if self.original_file_name in BATCH_FILES:
+        # Bulletproof check for file type
+        if self.original_file_name in BATCH_FILES or self.file_name in BATCH_FILES:
             self.file_type = "batch"
-        elif self.original_file_name in STREAM_FILES:
+        elif self.original_file_name in STREAM_FILES or self.file_name in STREAM_FILES:
             self.file_type = "stream"
 
         schema_registry_obj = sr.schema_registry()
         self.expected_schema = schema_registry_obj.get_schema(self.file_name)
-
     def run(self):
         logger.info(
             f"Validation started for {self.original_file_name}",
