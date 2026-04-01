@@ -43,7 +43,6 @@ CITIES = Schema(
     ],
 )
 
-
 REGIONS = Schema(
     file="regions",
     primary_key="region_id",
@@ -138,7 +137,7 @@ CUSTOMERS = Schema(
         Column("full_name",    "str",      nullable=True),
         Column("email",        "str",      nullable=True),
         Column("phone",        "str",      nullable=True),
-        Column("region_id",    "float",      nullable=True),
+        Column("region_id",    "float",    nullable=True),
         Column("segment_id",   "int",      nullable=True),
         Column("signup_date",  "datetime", nullable=True),
         Column("gender",       "str",      nullable=True, allowed_values=["male", "female"]),
@@ -199,7 +198,7 @@ AGENTS = Schema(
         Column("team_id",              "int",   nullable=True),
         Column("skill_level",          "str",   nullable=True,
                allowed_values=["Junior", "Mid", "Senior", "Lead"]),
-        Column("hire_date",            "str", nullable=True),
+        Column("hire_date",            "datetime", nullable=True),
         Column("avg_handle_time_min",  "int",   nullable=True),
         Column("resolution_rate",      "float", nullable=True),
         Column("csat_score",           "float", nullable=True),
@@ -221,10 +220,10 @@ ORDERS = Schema(
         Column("region_id",       "int",      nullable=True),
         Column("order_amount",    "float",    nullable=True),
         Column("delivery_fee",    "float",    nullable=True),
-        Column("discount_amount", "int",    nullable=True),
+        Column("discount_amount", "float",    nullable=True),
         Column("total_amount",    "float",    nullable=True),
         Column("order_status",    "str",      nullable=True,
-                allowed_values=["Delivered", "Cancelled", "Refunded"]),
+                allowed_values=["Pending", "Preparing", "OutForDelivery", "Delivered", "Cancelled", "Refunded"]),
         Column("payment_method",  "str",      nullable=False,
                allowed_values=["card", "cash", "wallet"]),
         Column("order_created_at","datetime", nullable=True),
