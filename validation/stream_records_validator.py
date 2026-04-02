@@ -49,9 +49,9 @@ class stream_records_validator():
 
 
         #Duplicate Validation
-        is_dup_valid, no_dup_df, rejected_dup= self.validate_duplicates(no_null_df, pk_col)
+        is_dup_valid, no_dup_df, rejected_dup, duplicate_count = self.validate_duplicates(no_null_df, pk_col)
         if not is_dup_valid:
-            all_quarantined = pd.concat([all_quarantined, rejected_dup]) 
+            all_quarantined = pd.concat([all_quarantined, rejected_dup])
 
 
         #Format Validation
@@ -67,9 +67,11 @@ class stream_records_validator():
 
         if not all_quarantined.empty:
             all_quarantined = all_quarantined.drop_duplicates()
-            
 
-        return valid_df , all_quarantined
+        duplicate_rate = round(duplicate_count / self.df.shape[0], 4) if self.df.shape[0] > 0 else 0.0
+
+        print(f"Valid Rows: {valid_df.shape[0]}, Quarantined Rows: {all_quarantined.shape[0]}, Duplicates: {duplicate_count}")
+        return valid_df, all_quarantined, duplicate_count, duplicate_rate
 
 
     def validate_nulls(self, df):
@@ -106,19 +108,20 @@ class stream_records_validator():
     def validate_duplicates(self, df , pk):
         """
         Remove duplicate records based on primary key.
+        Returns (is_valid, clean_df, rejected_df, duplicate_count)
         """
         duplicated_mask = df.duplicated(subset=[pk])
         duplicated_rows = df[duplicated_mask]
         count_duplicates = duplicated_rows.shape[0]
 
         if duplicated_rows.empty:
-            return True , df, None
+            return True , df, None, 0
         
         print(f"Found duplicates in {self.file_name} → {count_duplicates}")
         logger.error(f"Found {count_duplicates} duplicates in  {self.file_name}")
         #move_to_quarantine(duplicated_rows , "duplicated rows" , f"{self.file_name}")
         cleaned_df = df.drop_duplicates(subset=[pk]).copy()  # .copy() prevents SettingWithCopyWarning
-        return False , cleaned_df , duplicated_rows
+        return False , cleaned_df , duplicated_rows, count_duplicates
     
 
 

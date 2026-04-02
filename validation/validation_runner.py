@@ -16,17 +16,14 @@ BATCH_FILES:  dict = _cfg["watcher"]["batch"]["expected_files"]
 STREAM_FILES: dict = _cfg["watcher"]["stream"]["expected_files"]
 
 class validation_runner:
-    def __init__(self, parsed_df, file_name):
+    def __init__(self, parsed_df, file_name, file_path: str = None):  
         self.df = parsed_df
-        self.original_file_name = file_name                       # e.g., "orders.json"
-        self.file_name = os.path.splitext(file_name)[0].lower()   # e.g., "orders"
-        
-        # Safe fallback
+        self.original_file_name = file_name
+        self.file_name = os.path.splitext(file_name)[0].lower()
+        self.file_path = file_path
         self.file_type = "unknown"
-
         self.records_ingested = len(self.df)
 
-        # Bulletproof check for file type
         if self.original_file_name in BATCH_FILES or self.file_name in BATCH_FILES:
             self.file_type = "batch"
         elif self.original_file_name in STREAM_FILES or self.file_name in STREAM_FILES:
@@ -34,6 +31,7 @@ class validation_runner:
 
         schema_registry_obj = sr.schema_registry()
         self.expected_schema = schema_registry_obj.get_schema(self.file_name)
+
     def run(self):
         logger.info(
             f"Validation started for {self.original_file_name}",
@@ -42,26 +40,26 @@ class validation_runner:
                 "file_type": self.file_type
             }
         )
-        
-        # Initialize the fault handler
+
         fh = fault_handler()
 
+        # pretty print header
+        print(f"\n{'─' * 50}")
+        print(f"📄 Processing: {self.original_file_name} ({self.file_type})")
+        print(f"📂 Path: {self.file_path or 'unknown'}")
+        print(f"{'─' * 50}")
         print(f"Records Ingested: {self.records_ingested} in {self.original_file_name}")
-        
+
         # 1. Schema Validation
-        schema_validation = sv.schema_validator(self.df, self.expected_schema , self.file_name)
+        schema_validation = sv.schema_validator(self.df, self.expected_schema, self.file_name)
         schema_valid, clean_df, rejected_df = schema_validation.run()
 
-        # If schema is completely invalid, quarantine the whole thing and stop
         if not schema_valid:
             print(f"Schema validation failed completely in {self.original_file_name}")
-            # Use safe file type fallback to prevent directory error if something goes wrong
-            safe_file_type = self.file_type if self.file_type else "unknown"
-            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)            
+            fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)
             processed_timestamp = datetime.now().isoformat(sep=" ")
             return False, clean_df, self.original_file_name, processed_timestamp
 
-        # If some records failed schema but others are fine
         if not rejected_df.empty:
             print(f"Records failed in schema validation: {rejected_df.shape[0]}")
             fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)
@@ -71,24 +69,40 @@ class validation_runner:
         # 2. Batch or Stream specific validation
         if self.file_type == "batch":
             batch_records_validation = brv.batch_records_validator(clean_df, self.expected_schema, self.file_name)
-            batch_valid_df, batch_quarantined_df = batch_records_validation.run()
-            
+            batch_valid_df, batch_quarantined_df, duplicate_count, duplicate_rate = batch_records_validation.run()
+
             if not batch_quarantined_df.empty:
                 fh.move_to_quarantine(batch_quarantined_df, "Quarantined records due to batch rules", "batch")
+
+            logger.info(
+                f"Duplicate metrics for {self.original_file_name}",
+                extra={
+                    "duplicate_count":    duplicate_count,
+                    "duplicate_rate_pct": duplicate_rate,
+                    "total_records":      self.records_ingested,
+                }
+            )
 
             valid_records_df = batch_valid_df
 
         elif self.file_type == "stream":
             stream_records_validation = srv.stream_records_validator(clean_df, self.expected_schema, self.file_name)
-            stream_valid_df, stream_quarantined_df = stream_records_validation.run()
+            stream_valid_df, stream_quarantined_df, duplicate_count, duplicate_rate = stream_records_validation.run()
 
             if not stream_quarantined_df.empty:
                 fh.move_to_quarantine(stream_quarantined_df, "Quarantined records due to stream rules", "stream")
 
+            logger.info(
+                f"Duplicate metrics for {self.original_file_name}",
+                extra={
+                    "duplicate_count":    duplicate_count,
+                    "duplicate_rate_pct": duplicate_rate,
+                    "total_records":      self.records_ingested,
+                }
+            )
+
             orphan_validator_obj = ov.orphan_validator(stream_valid_df, self.file_name)
             final_stream_valid_df, orphan_df = orphan_validator_obj.run()
-            
-            print(f'Valid Rows: {final_stream_valid_df.shape[0] if final_stream_valid_df is not None else 0}, Quarantined Rows: {(orphan_df.shape[0] if orphan_df is not None else 0) + (stream_quarantined_df.shape[0] if stream_quarantined_df is not None else 0)}') 
 
             if orphan_df is not None and not orphan_df.empty:
                 fh.move_to_quarantine(orphan_df, "Orphan records (Referential integrity failed)", "stream")
@@ -96,7 +110,7 @@ class validation_runner:
             valid_records_df = final_stream_valid_df
 
         logger.info(f"Validation Ended for {self.original_file_name}")
-        
+
         # 3. PII Handling
         pii_processor = pii_handler()
         if valid_records_df is not None:
@@ -104,8 +118,5 @@ class validation_runner:
         else:
             secured_records_df = valid_records_df
 
-        # Generate the processing timestamp for the DWH layer
         processed_timestamp = datetime.now().isoformat(sep=" ")
-
-        # Return status, the clean dataframe, the file name, and the timestamp as separate variables
         return True, secured_records_df, self.original_file_name, processed_timestamp

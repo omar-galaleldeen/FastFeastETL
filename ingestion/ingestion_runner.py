@@ -80,7 +80,7 @@ def _process_file(path: Path) -> None:
 
     # step 4: hand off to validation layer (WRAPPED IN SAFETY NET)
     try:
-        validator = validation_runner(df, filename)
+        validator = validation_runner(df, filename,file_path=file_path)
         
         # Unpack the 4 returned variables specifically requested for DWH
         is_valid, clean_df, out_filename, processed_ts = validator.run()

@@ -87,3 +87,196 @@ alerting:
   sender: ""
   receivers: []
 
+# ============================================================
+# SCHEMAS
+# Each entry:
+#   primary_key : the PK column name
+#   columns     : list of column definitions
+#     - name           : column name (must match source file exactly)
+#     - dtype          : str | int | float | bool | datetime
+#     - nullable       : true | false  (false = NOT NULL, row rejected if empty)
+#     - allowed_values : optional list — if present, acts as a categorical whitelist
+# ============================================================
+schemas:
+
+  # ── BATCH ──────────────────────────────────────────────────
+
+  cities:
+    primary_key: city_id
+    columns:
+      - { name: city_id,   dtype: int, nullable: false }
+      - { name: city_name, dtype: str, nullable: false }
+      - { name: country,   dtype: str, nullable: false }
+      - { name: timezone,  dtype: str, nullable: false }
+
+  regions:
+    primary_key: region_id
+    columns:
+      - { name: region_id,         dtype: int,   nullable: false }
+      - { name: region_name,       dtype: str,   nullable: false }
+      - { name: city_id,           dtype: int,   nullable: false }
+      - { name: delivery_base_fee, dtype: float, nullable: false }
+
+  segments:
+    primary_key: segment_id
+    columns:
+      - { name: segment_id,       dtype: int,  nullable: false }
+      - { name: segment_name,     dtype: str,  nullable: false, allowed_values: [Regular, VIP] }
+      - { name: discount_pct,     dtype: int,  nullable: true  }
+      - { name: priority_support, dtype: bool, nullable: true  }
+
+  categories:
+    primary_key: category_id
+    columns:
+      - { name: category_id,   dtype: int, nullable: false }
+      - { name: category_name, dtype: str, nullable: false }
+
+  teams:
+    primary_key: team_id
+    columns:
+      - { name: team_id,   dtype: int, nullable: false }
+      - { name: team_name, dtype: str, nullable: true  }
+
+  reason_categories:
+    primary_key: reason_category_id
+    columns:
+      - { name: reason_category_id, dtype: int, nullable: false }
+      - { name: category_name,      dtype: str, nullable: false, allowed_values: [Delivery, Food, Payment] }
+
+  reasons:
+    primary_key: reason_id
+    columns:
+      - { name: reason_id,          dtype: int,   nullable: false }
+      - { name: reason_name,        dtype: str,   nullable: true  }
+      - { name: reason_category_id, dtype: int,   nullable: true  }
+      - { name: severity_level,     dtype: int,   nullable: true  }
+      - { name: typical_refund_pct, dtype: float, nullable: true  }
+
+  channels:
+    primary_key: channel_id
+    columns:
+      - { name: channel_id,   dtype: int, nullable: false }
+      - { name: channel_name, dtype: str, nullable: false, allowed_values: [app, chat, phone, email] }
+
+  priorities:
+    primary_key: priority_id
+    columns:
+      - { name: priority_id,            dtype: int, nullable: false }
+      - { name: priority_code,          dtype: str, nullable: false, allowed_values: [P1, P2, P3, P4] }
+      - { name: priority_name,          dtype: str, nullable: false, allowed_values: [Critical, High, Medium, Low] }
+      - { name: sla_first_response_min, dtype: int, nullable: true  }
+      - { name: sla_resolution_min,     dtype: int, nullable: true  }
+
+  customers:
+    primary_key: customer_id
+    columns:
+      - { name: customer_id, dtype: int,      nullable: false }
+      - { name: full_name,   dtype: str,      nullable: true  }
+      - { name: email,       dtype: str,      nullable: true  }
+      - { name: phone,       dtype: str,      nullable: true  }
+      - { name: region_id,   dtype: float,    nullable: true  }
+      - { name: segment_id,  dtype: int,      nullable: true  }
+      - { name: signup_date, dtype: datetime, nullable: true  }
+      - { name: gender,      dtype: str,      nullable: true,  allowed_values: [male, female] }
+      - { name: created_at,  dtype: datetime, nullable: true  }
+      - { name: updated_at,  dtype: datetime, nullable: true  }
+
+  restaurants:
+    primary_key: restaurant_id
+    columns:
+      - { name: restaurant_id,     dtype: int,      nullable: false }
+      - { name: restaurant_name,   dtype: str,      nullable: true  }
+      - { name: region_id,         dtype: int,      nullable: true  }
+      - { name: category_id,       dtype: int,      nullable: true  }
+      - { name: price_tier,        dtype: str,      nullable: true,  allowed_values: [Low, Mid, High] }
+      - { name: rating_avg,        dtype: float,    nullable: true  }
+      - { name: prep_time_avg_min, dtype: int,      nullable: true  }
+      - { name: is_active,         dtype: bool,     nullable: true  }
+      - { name: created_at,        dtype: datetime, nullable: true  }
+      - { name: updated_at,        dtype: datetime, nullable: true  }
+
+  drivers:
+    primary_key: driver_id
+    columns:
+      - { name: driver_id,            dtype: int,      nullable: false }
+      - { name: driver_name,          dtype: str,      nullable: true  }
+      - { name: driver_phone,         dtype: str,      nullable: true  }
+      - { name: national_id,          dtype: int,      nullable: true  }
+      - { name: region_id,            dtype: int,      nullable: true  }
+      - { name: shift,                dtype: str,      nullable: true,  allowed_values: [morning, evening, night] }
+      - { name: vehicle_type,         dtype: str,      nullable: true  }
+      - { name: hire_date,            dtype: datetime, nullable: true  }
+      - { name: rating_avg,           dtype: float,    nullable: true  }
+      - { name: on_time_rate,         dtype: float,    nullable: true  }
+      - { name: cancel_rate,          dtype: float,    nullable: true  }
+      - { name: completed_deliveries, dtype: int,      nullable: false }
+      - { name: is_active,            dtype: bool,     nullable: true  }
+      - { name: created_at,           dtype: datetime, nullable: true  }
+      - { name: updated_at,           dtype: datetime, nullable: true  }
+
+  agents:
+    primary_key: agent_id
+    columns:
+      - { name: agent_id,            dtype: int,      nullable: false }
+      - { name: agent_name,          dtype: str,      nullable: true  }
+      - { name: agent_email,         dtype: str,      nullable: true  }
+      - { name: agent_phone,         dtype: int,      nullable: true  }
+      - { name: team_id,             dtype: int,      nullable: true  }
+      - { name: skill_level,         dtype: str,      nullable: true,  allowed_values: [Junior, Mid, Senior, Lead] }
+      - { name: hire_date,           dtype: datetime, nullable: true  }
+      - { name: avg_handle_time_min, dtype: int,      nullable: true  }
+      - { name: resolution_rate,     dtype: float,    nullable: true  }
+      - { name: csat_score,          dtype: float,    nullable: true  }
+      - { name: is_active,           dtype: bool,     nullable: true  }
+      - { name: created_at,          dtype: datetime, nullable: true  }
+      - { name: updated_at,          dtype: datetime, nullable: true  }
+
+  # ── STREAM ─────────────────────────────────────────────────
+
+  orders:
+    primary_key: order_id
+    columns:
+      - { name: order_id,        dtype: str,      nullable: false }
+      - { name: customer_id,     dtype: int,      nullable: true  }
+      - { name: restaurant_id,   dtype: int,      nullable: true  }
+      - { name: driver_id,       dtype: int,      nullable: true  }
+      - { name: region_id,       dtype: int,      nullable: true  }
+      - { name: order_amount,    dtype: float,    nullable: true  }
+      - { name: delivery_fee,    dtype: float,    nullable: true  }
+      - { name: discount_amount, dtype: float,    nullable: true  }
+      - { name: total_amount,    dtype: float,    nullable: true  }
+      - { name: order_status,    dtype: str,      nullable: true,  allowed_values: [Pending, Preparing, OutForDelivery, Delivered, Cancelled, Refunded] }
+      - { name: payment_method,  dtype: str,      nullable: false, allowed_values: [card, cash, wallet] }
+      - { name: order_created_at,dtype: datetime, nullable: true  }
+      - { name: delivered_at,    dtype: datetime, nullable: true  }
+
+  tickets:
+    primary_key: ticket_id
+    columns:
+      - { name: ticket_id,         dtype: str,      nullable: false }
+      - { name: order_id,          dtype: str,      nullable: true  }
+      - { name: customer_id,       dtype: int,      nullable: true  }
+      - { name: driver_id,         dtype: int,      nullable: true  }
+      - { name: restaurant_id,     dtype: int,      nullable: true  }
+      - { name: agent_id,          dtype: int,      nullable: true  }
+      - { name: reason_id,         dtype: int,      nullable: true  }
+      - { name: priority_id,       dtype: int,      nullable: true  }
+      - { name: channel_id,        dtype: int,      nullable: true  }
+      - { name: status,            dtype: str,      nullable: true,  allowed_values: [Resolved, Closed, Reopened, Open, InProgress] }
+      - { name: refund_amount,     dtype: float,    nullable: true  }
+      - { name: created_at,        dtype: datetime, nullable: true  }
+      - { name: first_response_at, dtype: datetime, nullable: true  }
+      - { name: resolved_at,       dtype: datetime, nullable: true  }
+      - { name: sla_first_due_at,  dtype: datetime, nullable: true  }
+      - { name: sla_resolve_due_at,dtype: datetime, nullable: true  }
+
+  ticket_events:
+    primary_key: event_id
+    columns:
+      - { name: event_id,   dtype: str,      nullable: false }
+      - { name: ticket_id,  dtype: str,      nullable: true  }
+      - { name: agent_id,   dtype: int,      nullable: true  }
+      - { name: event_ts,   dtype: datetime, nullable: true  }
+      - { name: old_status, dtype: str,      nullable: true,  allowed_values: [Open, InProgress, Resolved, Closed, Reopened] }
+      - { name: new_status, dtype: str,      nullable: false, allowed_values: [Open, InProgress, Resolved, Closed, Reopened] }
+      - { name: notes,      dtype: str,      nullable: true  }
