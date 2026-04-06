@@ -4,12 +4,14 @@ schema_init.py
 Creates all tables in fastfeastapp on pipeline startup.
 Uses IF NOT EXISTS everywhere — safe to call on every run.
 
-Key design choices vs the old schema_ddl.sql:
+Key design choices:
+  - FK REFERENCES enforced on all fact and dimension tables for
+    correct JOIN behaviour and query planner optimisation
+  - orphan_validator ensures no row reaches a fact table with a
+    missing parent — FK constraints are the final safety net
   - No CHECK constraints on business columns (validation layer owns that)
-  - No FK REFERENCES constraints on fact tables (orphan_validator owns that)
-  - Dimension tables keep their PRIMARY KEY only — fast INSERT, no constraint overhead
   - Quarantine table stores raw_data as JSONB — works for any table shape
-  - pipeline_file_log replaces the SQLite tracker for analytics visibility
+  - pipeline_file_log is the analytics-facing file tracking record
 """
 from __future__ import annotations
 
@@ -102,7 +104,7 @@ _DDL: list[str] = [
     CREATE TABLE IF NOT EXISTS dim_reason (
         reason_id          INTEGER      PRIMARY KEY,
         reason_name        VARCHAR(200),
-        reason_category_id INTEGER,
+        reason_category_id INTEGER      REFERENCES dim_reason_category(reason_category_id),
         reason_category    VARCHAR(100),
         severity_level     SMALLINT,
         typical_refund_pct NUMERIC(4,2)
@@ -207,23 +209,23 @@ _DDL: list[str] = [
     # ── Fact: fact_order ──────────────────────────────────────────────────── #
     """
     CREATE TABLE IF NOT EXISTS fact_order (
-        order_sk       BIGSERIAL    PRIMARY KEY,
-        order_id       VARCHAR(36)  NOT NULL UNIQUE,
-        customer_id    INTEGER REFERENCES dim_customer(customer_id),
-        restaurant_id  INTEGER REFERENCES dim_restaurant(restaurant_id),
-        driver_id      INTEGER REFERENCES dim_driver(driver_id),
-        region_id      INTEGER REFERENCES dim_region(region_id),
-        date_key       INTEGER REFERENCES dim_date(date_key),
-        time_key       INTEGER REFERENCES dim_time(time_key),
-        order_status   VARCHAR(20),
-        payment_method VARCHAR(20),
-        created_at     TIMESTAMP,
-        delivered_at   TIMESTAMP,
-        order_amount   NUMERIC(10,2),
-        delivery_fee   NUMERIC(8,2),
+        order_sk        BIGSERIAL    PRIMARY KEY,
+        order_id        VARCHAR(36)  NOT NULL UNIQUE,
+        customer_id     INTEGER      REFERENCES dim_customer(customer_id),
+        restaurant_id   INTEGER      REFERENCES dim_restaurant(restaurant_id),
+        driver_id       INTEGER      REFERENCES dim_driver(driver_id),
+        region_id       INTEGER      REFERENCES dim_region(region_id),
+        date_key        INTEGER      REFERENCES dim_date(date_key),
+        time_key        INTEGER      REFERENCES dim_time(time_key),
+        order_status    VARCHAR(20),
+        payment_method  VARCHAR(20),
+        created_at      TIMESTAMP,
+        delivered_at    TIMESTAMP,
+        order_amount    NUMERIC(10,2),
+        delivery_fee    NUMERIC(8,2),
         discount_amount NUMERIC(8,2),
-        total_amount   NUMERIC(10,2),
-        _loaded_at     TIMESTAMP NOT NULL DEFAULT NOW()
+        total_amount    NUMERIC(10,2),
+        _loaded_at      TIMESTAMP NOT NULL DEFAULT NOW()
     )
     """,
 
@@ -337,15 +339,20 @@ _DDL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_fact_order_customer   ON fact_order(customer_id)",
     "CREATE INDEX IF NOT EXISTS idx_fact_order_restaurant ON fact_order(restaurant_id)",
     "CREATE INDEX IF NOT EXISTS idx_fact_order_driver     ON fact_order(driver_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fact_order_region     ON fact_order(region_id)",
     "CREATE INDEX IF NOT EXISTS idx_fact_order_date       ON fact_order(date_key)",
     "CREATE INDEX IF NOT EXISTS idx_fact_order_status     ON fact_order(order_status)",
     "CREATE INDEX IF NOT EXISTS idx_fact_order_created    ON fact_order(created_at)",
 
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_order     ON fact_ticket(order_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fact_ticket_customer  ON fact_ticket(customer_id)",
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_agent     ON fact_ticket(agent_id)",
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_priority  ON fact_ticket(priority_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fact_ticket_channel   ON fact_ticket(channel_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fact_ticket_reason    ON fact_ticket(reason_id)",
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_date      ON fact_ticket(date_key)",
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_region    ON fact_ticket(region_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fact_ticket_status    ON fact_ticket(status)",
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_sla_r     ON fact_ticket(sla_response_breached)",
     "CREATE INDEX IF NOT EXISTS idx_fact_ticket_sla_res   ON fact_ticket(sla_resolution_breached)",
 
