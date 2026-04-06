@@ -15,13 +15,15 @@ _cfg         = get_config()
 BATCH_FILES:  dict = _cfg["watcher"]["batch"]["expected_files"]
 STREAM_FILES: dict = _cfg["watcher"]["stream"]["expected_files"]
 
+
 class validation_runner:
-    def __init__(self, parsed_df, file_name, file_path: str = None):  
-        self.df = parsed_df
+    def __init__(self, parsed_df, file_name, file_path: str = None, source_table: str = None):
+        self.df           = parsed_df
         self.original_file_name = file_name
-        self.file_name = os.path.splitext(file_name)[0].lower()
-        self.file_path = file_path
-        self.file_type = "unknown"
+        self.file_name    = os.path.splitext(file_name)[0].lower()
+        self.file_path    = file_path
+        self.source_table = source_table    # passed to fault_handler for quarantine metadata
+        self.file_type    = "unknown"
         self.records_ingested = len(self.df)
 
         if self.original_file_name in BATCH_FILES or self.file_name in BATCH_FILES:
@@ -29,21 +31,21 @@ class validation_runner:
         elif self.original_file_name in STREAM_FILES or self.file_name in STREAM_FILES:
             self.file_type = "stream"
 
-        schema_registry_obj = sr.schema_registry()
-        self.expected_schema = schema_registry_obj.get_schema(self.file_name)
+        schema_registry_obj   = sr.schema_registry()
+        self.expected_schema  = schema_registry_obj.get_schema(self.file_name)
 
     def run(self):
         logger.info(
             f"Validation started for {self.original_file_name}",
-            extra={
-                "record_count": self.records_ingested,
-                "file_type": self.file_type
-            }
+            extra={"record_count": self.records_ingested, "file_type": self.file_type}
         )
 
-        fh = fault_handler()
+        # fault_handler now receives source_file and source_table for Postgres quarantine
+        fh = fault_handler(
+            source_file  = self.original_file_name,
+            source_table = self.source_table,
+        )
 
-        # pretty print header
         print(f"\n{'─' * 50}")
         print(f"📄 Processing: {self.original_file_name} ({self.file_type})")
         print(f"📂 Path: {self.file_path or 'unknown'}")
@@ -68,7 +70,9 @@ class validation_runner:
 
         # 2. Batch or Stream specific validation
         if self.file_type == "batch":
-            batch_records_validation = brv.batch_records_validator(clean_df, self.expected_schema, self.file_name)
+            batch_records_validation = brv.batch_records_validator(
+                clean_df, self.expected_schema, self.file_name
+            )
             batch_valid_df, batch_quarantined_df, duplicate_count, duplicate_rate = batch_records_validation.run()
 
             if not batch_quarantined_df.empty:
@@ -82,11 +86,12 @@ class validation_runner:
                     "total_records":      self.records_ingested,
                 }
             )
-
             valid_records_df = batch_valid_df
 
         elif self.file_type == "stream":
-            stream_records_validation = srv.stream_records_validator(clean_df, self.expected_schema, self.file_name)
+            stream_records_validation = srv.stream_records_validator(
+                clean_df, self.expected_schema, self.file_name
+            )
             stream_valid_df, stream_quarantined_df, duplicate_count, duplicate_rate = stream_records_validation.run()
 
             if not stream_quarantined_df.empty:
@@ -105,7 +110,11 @@ class validation_runner:
             final_stream_valid_df, orphan_df = orphan_validator_obj.run()
 
             if orphan_df is not None and not orphan_df.empty:
-                fh.move_to_quarantine(orphan_df, "Orphan records (Referential integrity failed)", "stream")
+                fh.move_to_quarantine(
+                    orphan_df,
+                    "Orphan records (Referential integrity failed)",
+                    "stream"
+                )
 
             valid_records_df = final_stream_valid_df
 
