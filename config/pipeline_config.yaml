@@ -280,3 +280,12 @@ schemas:
       - { name: old_status, dtype: str,      nullable: true,  allowed_values: [Open, InProgress, Resolved, Closed, Reopened] }
       - { name: new_status, dtype: str,      nullable: false, allowed_values: [Open, InProgress, Resolved, Closed, Reopened] }
       - { name: notes,      dtype: str,      nullable: true  }
+# ============================================================
+# DATABASE — PostgreSQL connection for fastfeastapp DWH
+# ============================================================
+database:
+  host:     localhost
+  port:     5432
+  user:     postgres
+  password: "admin"          # set your password here or use env var PGPASSWORD
+  dbname:   fastfeastapp
