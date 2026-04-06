@@ -1,3 +1,11 @@
+database:
+  host:     localhost
+  port:     5432
+  user:     postgres
+  password: "admin"         
+  dbname:   fastfeastapp
+
+
 watcher:
   batch:
     dir: "data/input/batch"
@@ -49,6 +57,9 @@ watcher:
         foreign_keys:
           ticket_id: tickets
 
+## for ingesting master data at the first pipeline start i.e. cold start.
+master:
+  dir: "data/master"
 
 tracker:
   db_path: "data/tracker/pipeline_tracker.db"
@@ -280,12 +291,3 @@ schemas:
       - { name: old_status, dtype: str,      nullable: true,  allowed_values: [Open, InProgress, Resolved, Closed, Reopened] }
       - { name: new_status, dtype: str,      nullable: false, allowed_values: [Open, InProgress, Resolved, Closed, Reopened] }
       - { name: notes,      dtype: str,      nullable: true  }
-# ============================================================
-# DATABASE — PostgreSQL connection for fastfeastapp DWH
-# ============================================================
-database:
-  host:     localhost
-  port:     5432
-  user:     postgres
-  password: "admin"          # set your password here or use env var PGPASSWORD
-  dbname:   fastfeastapp

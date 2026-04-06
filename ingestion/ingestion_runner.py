@@ -18,6 +18,7 @@ from datawarehouse.schema_init   import init_schema
 from datawarehouse.dim_loader    import load_dimension
 from datawarehouse.fact_loader   import load_fact
 from datawarehouse.file_log      import record as log_file
+from datawarehouse.master_seeder import seed_master_data
 
 logger = get_logger(__name__)
 
@@ -215,7 +216,10 @@ def start() -> None:
     init_pool()
     init_schema()
 
+    # Seed master data before watching for any new files
     file_tracker.start()
+    seed_master_data()
+
     file_queue, batch_thread, stream_thread = file_watcher.start()
 
     global _batch_thread, _stream_thread
