@@ -42,6 +42,31 @@ _DDL: list[str] = [
         day_name     VARCHAR(10) NOT NULL
     )
     """,
+    
+    # ── Populate: dim_date ───────────────────────────────────────────────── #
+    """
+    INSERT INTO public.dim_date (
+    date_key, full_date, year, quarter, month, month_name,
+    week, day_of_week, day_of_month, day_of_year, day_name
+    )
+    SELECT
+        TO_CHAR(d, 'YYYYMMDD')::INTEGER      AS date_key,
+        d::DATE                               AS full_date,
+        EXTRACT(YEAR    FROM d)::SMALLINT     AS year,
+        EXTRACT(QUARTER FROM d)::SMALLINT     AS quarter,
+        EXTRACT(MONTH   FROM d)::SMALLINT     AS month,
+        TO_CHAR(d, 'Month')                   AS month_name,
+        EXTRACT(WEEK    FROM d)::SMALLINT     AS week,
+        EXTRACT(DOW     FROM d)::SMALLINT + 1 AS day_of_week,
+        EXTRACT(DAY     FROM d)::SMALLINT     AS day_of_month,
+        EXTRACT(DOY     FROM d)::SMALLINT     AS day_of_year,
+        TO_CHAR(d, 'Day')                     AS day_name
+    FROM generate_series(
+        '2019-01-01'::DATE,
+        '2030-12-31'::DATE,
+        '1 day'::INTERVAL
+    ) AS t(d);
+    """,
 
     # ── Dimension: dim_time ───────────────────────────────────────────────── #
     """
@@ -53,6 +78,25 @@ _DDL: list[str] = [
         am_pm     CHAR(2)  NOT NULL,
         shift     VARCHAR(10) NOT NULL
     )
+    """,
+    
+    # ── Populate: dim_date ───────────────────────────────────────────────── #
+    """
+    INSERT INTO public.dim_time (time_key, full_time, hour, minute, am_pm, shift)
+    SELECT
+        (h * 100 + m)                             AS time_key,
+        MAKE_TIME(h, m, 0)                        AS full_time,
+        h::SMALLINT                               AS hour,
+        m::SMALLINT                               AS minute,
+        CASE WHEN h < 12 THEN 'AM' ELSE 'PM' END  AS am_pm,
+        CASE
+            WHEN h BETWEEN 6  AND 13 THEN 'morning'
+            WHEN h BETWEEN 14 AND 21 THEN 'evening'
+            ELSE                          'night'
+        END                                       AS shift
+    FROM
+        generate_series(0, 23) AS h,
+        generate_series(0, 59) AS m;
     """,
 
     # ── Dimension: dim_region ─────────────────────────────────────────────── #
