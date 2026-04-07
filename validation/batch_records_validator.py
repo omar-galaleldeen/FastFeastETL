@@ -115,15 +115,13 @@ class batch_records_validator():
                     logger.error(f"Found {rejected_emails.shape[0]} invalid email formats in {self.file_name}")
 
         phone_cols          = [col for col in df.columns if 'phone' in col.lower()]
-        phone_regex_pattern = r'^01[0125]\d{8}$'
+        #phone_regex_pattern = r'^01[0125]\d{8}$' 
+        phone_regex_pattern = r'^0?1[0125]\d{8}$'
         for p_col in phone_cols:
             rejected_phones = pd.DataFrame()
-            if is_string_dtype(df[p_col]):
-                rejected_mask  = ~df[p_col].str.contains(phone_regex_pattern, na=False, regex=True)
-                rejected_phones = df[rejected_mask]
-            elif is_integer_dtype(df[p_col]):
-                rejected_mask  = df[p_col].astype(str).str.len() != 11
-                rejected_phones = df[rejected_mask]
+            # Omar: ensure validation works regardless of dtype (int / float / string)
+            rejected_mask  = ~df[p_col].astype(str).str.fullmatch(phone_regex_pattern)
+            rejected_phones = df[rejected_mask]
             if not rejected_phones.empty:
                 all_rejected_rows = pd.concat([all_rejected_rows, rejected_phones])
                 logger.error(f"Found {rejected_phones.shape[0]} invalid phone formats in {self.file_name}")

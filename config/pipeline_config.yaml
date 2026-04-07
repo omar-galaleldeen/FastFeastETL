@@ -231,7 +231,7 @@ schemas:
       - { name: agent_id,            dtype: int,      nullable: false }
       - { name: agent_name,          dtype: str,      nullable: true  }
       - { name: agent_email,         dtype: str,      nullable: true  }
-      - { name: agent_phone,         dtype: int,      nullable: true  }
+      - { name: agent_phone,         dtype: str,      nullable: true  }
       - { name: team_id,             dtype: int,      nullable: true  }
       - { name: skill_level,         dtype: str,      nullable: true,  allowed_values: [Junior, Mid, Senior, Lead] }
       - { name: hire_date,           dtype: datetime, nullable: true  }
