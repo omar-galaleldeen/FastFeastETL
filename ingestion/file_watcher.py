@@ -114,6 +114,14 @@ class BatchWatcherThread(threading.Thread):
 
     def run(self) -> None:
         logger.info("[batch] watcher started")
+        
+        ## ADDED: On startup, check if today's batch was already missed (e.g. pipeline started at 2am)
+        # On startup, check if today's batch was already missed
+        today = str(date.today())
+        now   = time.localtime()
+        if now.tm_hour >= self.trigger_hour and self._scanned_today != today:
+            self._scan()
+            self._scanned_today = today
 
         while not self._stop_event.is_set():
             now      = time.localtime()
