@@ -78,12 +78,12 @@ logging:
   dir: "logs"  
 
 alerting:
-  enabled: false
-
-  smtp_host: smtp.gmail.com
-  smtp_port: 587
-  user_name: ""
-  password: ""
-  sender: ""
-  receivers: []
-
+  enabled: True
+  smtp:
+    host: "smtp.gmail.com"
+    port: 587
+    user_name: "your_email@gmail.com"
+    password: "YOUR_APP_PASSWORD_HERE"
+    sender: "your_email@gmail.com"
+    receivers: 
+      - "your_email@gmail.com"
