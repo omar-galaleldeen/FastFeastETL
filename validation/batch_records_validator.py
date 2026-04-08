@@ -38,9 +38,15 @@ class batch_records_validator():
         is_nulls_valid, no_null_df, rejected_nulls = self.validate_nulls(self.df)
         if not is_nulls_valid:
             all_quarantined = pd.concat([all_quarantined, rejected_nulls])
+            
+        # Empty Validaton
+        is_empty_valid, no_empty_df, rejected_empty = self.validate_empty(no_null_df)
+        if not is_empty_valid:
+            all_quarantined = pd.concat([all_quarantined, rejected_empty])
+           
 
         # Duplicate Validation
-        is_dup_valid, no_dup_df, rejected_dup, duplicate_count = self.validate_duplicates(no_null_df, pk_col)
+        is_dup_valid, no_dup_df, rejected_dup, duplicate_count = self.validate_duplicates(no_empty_df, pk_col)
         if not is_dup_valid:
             all_quarantined = pd.concat([all_quarantined, rejected_dup])
 
@@ -76,7 +82,25 @@ class batch_records_validator():
                      extra={"columns_with_nulls": columns_with_nulls})
         cleaned_df = df.dropna()
         return False, cleaned_df, nulls_df
-
+    
+    
+    def validate_empty(self, df):
+        str_cols = df.select_dtypes(include=['object', 'string']).columns
+        if len(str_cols) == 0:
+            return True, df, None
+        
+        empty_mask = df[str_cols].apply(lambda col: col.astype(str).str.strip() == "").any(axis=1)
+        empty_rows = df[empty_mask]
+        count_empty = empty_rows.shape[0]
+        if empty_rows.empty:
+            return True, df, None
+        
+        print(f"Found Empty Values in {self.file_name} → {count_empty}")
+        logger.error(f"Found {count_empty} empty values in {self.file_name}")
+        cleaned_df = df[~empty_mask].reset_index(drop=True)
+        return False, cleaned_df, empty_rows
+    
+    
     def validate_duplicates(self, df, pk):
         duplicated_mask = df.duplicated(subset=[pk])
         duplicated_rows = df[duplicated_mask]

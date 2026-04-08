@@ -7,10 +7,16 @@ logger = get_logger(__name__)
 class pii_handler:
     def __init__(self):
         # Dictionary defining which columns contain PII for each file
+        # Note: will keep the name plain text and hash the rest of the values.
+        #self.pii_columns = {
+        #    "customers": ["full_name", "email", "phone"],
+        #    "drivers": ["driver_name", "driver_phone", "national_id"],
+        #    "agents": ["agent_name", "agent_email", "agent_phone"]
+        #}
         self.pii_columns = {
-            "customers": ["full_name", "email", "phone"],
-            "drivers": ["driver_name", "driver_phone", "national_id"],
-            "agents": ["agent_name", "agent_email", "agent_phone"]
+        "customers": ["email", "phone"],
+        "drivers": ["driver_phone", "national_id"],
+        "agents": [ "agent_email", "agent_phone"]
         }
 
     def _hash_value(self, val):

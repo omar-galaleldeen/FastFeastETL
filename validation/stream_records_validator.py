@@ -41,29 +41,32 @@ class stream_records_validator():
         """
         pk_col = self.expected_schema.primary_key
         all_quarantined = pd.DataFrame()
+        duplicate_count = 0  
 
-        #Null Validation
+        # Null Validation
         is_nulls_valid, no_null_df, rejected_nulls = self.validate_nulls(self.df)
-        if not is_nulls_valid:
+        if not is_nulls_valid and rejected_nulls is not None:
             all_quarantined = pd.concat([all_quarantined, rejected_nulls]) 
 
+        # Empty Validation 
+        is_empty_valid, no_empty_df, rejected_empty = self.validate_empty(no_null_df)
+        if not is_empty_valid and rejected_empty is not None:
+            all_quarantined = pd.concat([all_quarantined, rejected_empty])
 
-        #Duplicate Validation
-        is_dup_valid, no_dup_df, rejected_dup, duplicate_count = self.validate_duplicates(no_null_df, pk_col)
-        if not is_dup_valid:
+        # Duplicate Validation 
+        is_dup_valid, no_dup_df, rejected_dup, duplicate_count = self.validate_duplicates(no_empty_df, pk_col)
+        if not is_dup_valid and rejected_dup is not None:
             all_quarantined = pd.concat([all_quarantined, rejected_dup])
 
-
-        #Format Validation
+        # Format Validation
         is_formats_valid, format_clean_df , rejected_formats = self.validate_formats(no_dup_df)
-        if not is_formats_valid:
+        if not is_formats_valid and rejected_formats is not None:
             all_quarantined = pd.concat([all_quarantined, rejected_formats])
 
-        #Range Validation
+        # Range Validation
         is_range_valid , valid_df , rejected_ranges = self.validate_value_ranges(format_clean_df)
-        if not is_range_valid:
+        if not is_range_valid and rejected_ranges is not None:
             all_quarantined = pd.concat([all_quarantined, rejected_ranges])
-
 
         if not all_quarantined.empty:
             all_quarantined = all_quarantined.drop_duplicates()
@@ -180,3 +183,23 @@ class stream_records_validator():
             return False, valid_df ,all_rejected_rows
         
         return True , df , None
+    
+    def validate_empty(self, df):
+        str_cols = df.select_dtypes(include=['object', 'string']).columns
+        if len(str_cols) == 0:
+            return True, df, None
+
+        empty_mask = df[str_cols].apply(lambda col: col.astype(str).str.strip() == "").any(axis=1)
+
+        empty_rows = df[empty_mask]
+        count_empty = empty_rows.shape[0]
+
+        if empty_rows.empty:
+            return True, df, None
+
+        print(f"Found Empty Values in {self.file_name} → {count_empty}")
+        logger.error(f"Found {count_empty} empty values in {self.file_name}")
+
+        cleaned_df = df[~empty_mask].copy()
+
+        return False, cleaned_df, empty_rows
