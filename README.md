@@ -311,6 +311,11 @@ python scripts/generate_stream_data.py --date 2026-02-20 --hour 9
 python main.py
 ```
 
+**6. Generate more streaming data**
+```bash
+python scripts/generate_stream_data.py --date 2026-02-20 --hour 9 10 11 12
+```
+
 ---
 
 ## Running the Pipeline
