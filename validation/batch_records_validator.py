@@ -135,7 +135,7 @@ class batch_records_validator():
         if not all_rejected_rows.empty:
             print(f"Found invalid formats in {self.file_name} → {all_rejected_rows.shape[0]}")
             all_rejected_rows = all_rejected_rows.drop_duplicates()
-            cleaned_df = df.drop(all_rejected_rows.index)
+            cleaned_df = df[~df.index.isin(all_rejected_rows.index)].reset_index(drop=True)
             return False, cleaned_df, all_rejected_rows
 
         return True, df, None
@@ -175,7 +175,7 @@ class batch_records_validator():
 
         if not all_rejected_rows.empty:
             all_rejected_rows = all_rejected_rows.drop_duplicates()
-            valid_df = df.drop(all_rejected_rows.index)
+            valid_df = df[~df.index.isin(all_rejected_rows.index)].reset_index(drop=True)
             return False, valid_df, all_rejected_rows
 
         return True, df, None
