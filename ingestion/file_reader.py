@@ -13,7 +13,7 @@ from config.config_loader import get_config
 _cfg          = get_config()
 FILE_TYPE_MAP : dict[str, str] = _cfg["reader"]["file_type_map"]
 
-
+    
 
 # ─── Private readers ──────────────────────────────────────────────────────────
 
