@@ -183,9 +183,6 @@ Upserts dimension records (insert new, update changed) and inserts fact records 
 ### Phase 5 — Warehouse / OLAP
 Builds and maintains the dimensional model in PostgreSQL. Creates analytical views for SLA monitoring, revenue impact, complaint rates, and data quality metrics.
 
-### Phase 6 — Reporting (Bonus)
-Generates a daily PDF quality report covering validation statistics, orphan reference summary, processing latency, and rejected record counts. Sends the report by email automatically.
-
 ---
 
 ## Data Flow
