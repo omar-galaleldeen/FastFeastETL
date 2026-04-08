@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import logging
 from utils.logger import get_logger
@@ -34,5 +35,10 @@ def main():
         logger.info("Pipeline stopped successfully.")
         print("👋 Pipeline stopped. Goodbye!")
 
+    # 1. Start the SLA Updater as a background detached process
+    try:
+        subprocess.Popen([sys.executable, "sla_updater_job.py"])
+    except Exception as e:
+        print(f"⚠️ Warning: Could not start SLA Updater: {e}")
 if __name__ == "__main__":
     main()
