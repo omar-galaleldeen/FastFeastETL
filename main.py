@@ -15,6 +15,12 @@ def main():
     print("=====================================================\n")
 
     try:
+        subprocess.Popen([sys.executable, "-m", "utils.sla_updater_job"])
+        logger.info("SLA updater started in background")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not start SLA Updater: {e}")
+
+    try:
         # This will block the main thread and run the continuous ingestion loop
         ingestion_runner.start()
         
@@ -34,12 +40,6 @@ def main():
         ingestion_runner.stop()
         logger.info("Pipeline stopped successfully.")
         print("👋 Pipeline stopped. Goodbye!")
-
-    # 1. Start the SLA Updater as a background detached process
-    try:
-        subprocess.Popen([sys.executable, "utils/sla_updater_job.py"])
-    except Exception as e:
-        print(f"⚠️ Warning: Could not start SLA Updater: {e}")
 
         
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+# utils/sla_updater_job.py
 import time
 from sqlalchemy import create_engine, text
 from utils.logger import get_logger
@@ -22,12 +23,12 @@ def update_sla_view():
         CASE WHEN first_response_at <= sla_first_due_at THEN True ELSE False END AS is_first_response_met,
         CASE WHEN resolved_at <= sla_resolve_due_at THEN True ELSE False END AS is_resolution_met
     FROM 
-        tickets;
+        fact_ticket;
     """
     
     try:
         db_config = _cfg.get("database", {})
-        conn_str = f"postgresql://{db_config.get('user', 'postgres')}:{db_config.get('password', 'admin')}@{db_config.get('host', 'localhost')}:{db_config.get('port', '5432')}/{db_config.get('dbname', 'fastfeast_dwh')}"
+        conn_str = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['dbname']}"
         engine = create_engine(conn_str)
         
         with engine.begin() as conn:
