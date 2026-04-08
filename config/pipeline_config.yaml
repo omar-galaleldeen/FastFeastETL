@@ -9,7 +9,7 @@ database:
 watcher:
   batch:
     dir: "data/input/batch"
-    trigger_hour: 6
+    trigger_hour: 1
     expected_files:
 
       customers.csv:

@@ -80,7 +80,7 @@ _DDL: list[str] = [
     )
     """,
     
-    # ── Populate: dim_date ───────────────────────────────────────────────── #
+    # ── Populate: dim_time ───────────────────────────────────────────────── #
     """
     INSERT INTO public.dim_time (time_key, full_time, hour, minute, am_pm, shift)
     SELECT
