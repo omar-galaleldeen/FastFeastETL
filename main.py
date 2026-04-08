@@ -37,7 +37,7 @@ def main():
 
     # 1. Start the SLA Updater as a background detached process
     try:
-        subprocess.Popen([sys.executable, "sla_updater_job.py"])
+        subprocess.Popen([sys.executable, "utils/sla_updater_job.py"])
     except Exception as e:
         print(f"⚠️ Warning: Could not start SLA Updater: {e}")
 if __name__ == "__main__":
