@@ -1,7 +1,7 @@
-# FastFeast ETL Pipeline
+# FastFeastETL
 
-A production-grade, near real-time data pipeline built for **FastFeast** — a rapidly growing food delivery platform. The pipeline extracts batch and micro-batch data from OLTP exports, validates and transforms it, loads it into a PostgreSQL dimensional model, runs OLAP analytics, efficiently processing both batch and micro-batch operational data. It extracts data from OLTP exports, performs comprehensive validation and transformation, loads the refined data into a PostgreSQL-based dimensional model, executes OLAP analytics, and ultimately feeds a Power BI dashboard for insightful visualization.
-
+> **A production-grade, near real-time data pipeline built for **FastFeast** — a rapidly growing food delivery platform. The pipeline extracts batch and micro-batch data from OLTP exports, validates and transforms it, loads it into a PostgreSQL dimensional model, runs OLAP analytics, efficiently processing both batch and micro-batch operational data. It extracts data from OLTP exports, performs comprehensive validation and transformation, loads the refined data into a PostgreSQL-based dimensional model, executes OLAP analytics, and ultimately feeds a Power BI dashboard for insightful visualization.**
+> 
 ---
 
 ## Table of Contents
@@ -9,14 +9,13 @@ A production-grade, near real-time data pipeline built for **FastFeast** — a r
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
-- [Pipeline Phases](#pipeline-phases)
-- [Data Flow](#data-flow)
-- [Threading Model](#threading-model)
+- [Features](#features)
+  - [Threading Model](#threading-model)
+  - [Dual-Mode Data Ingestion](#dual-mode-data-ingestion)
 - [Configuration](#configuration)
 - [Data Generation](#data-generation)
 - [Getting Started](#getting-started)
-- [Running the Pipeline](#running-the-pipeline)
-- [Testing](#testing)
+- [Orphan Handling](#orphan-handling)
 - [Logging](#logging)
 - [Tech Stack](#tech-stack)
 
@@ -24,58 +23,87 @@ A production-grade, near real-time data pipeline built for **FastFeast** — a r
 
 ## Overview
 
-FastFeast exports operational data in two modes:
+FastFeastETL is a comprehensive ETL system designed for processing food delivery platform data at scale. It ingests both batch (daily snapshots) and stream (real-time events) data, validates against schema and business rules, detects orphaned records, loads into a dimensional PostgreSQL warehouse, and provides analytics-ready data for business intelligence.
 
-| Mode | Frequency | Files |
-|---|---|---|
-| **Batch** | Once daily | 13 dimension files (CSV + JSON) |
-| **Micro-batch** | Continuously throughout the day | 3 fact files (CSV + JSON) |
-
-The pipeline handles both modes simultaneously using dedicated daemon threads, processes files through a multi-phase ETL flow, and guarantees that the pipeline **never stops** — all errors are caught, logged, and skipped while processing continues.
+**Core Capabilities:**
+- **Dual-Mode Ingestion** - Batch (CSV) and stream (JSON) data sources
+- **Schema-Driven Validation** - Type checking, nullable constraints, business rules
+- **Foreign Key Integrity** - Orphan detection with configurable 24-hour resolution window
+- **Quarantine System** - Rejected records stored for analysis and recovery
+- **Dimensional Warehouse** - Star schema optimized for analytics (facts + dimensions)
+- **Thread-Safe Operations** - Concurrent processing via psycopg2 connection pooling
+- **Data Seeding** - Master data initialization and daily snapshot generation
+- **Comprehensive Logging** - File logs, pipeline metadata, and audit trails
 
 ---
 
 ## Architecture
 
 ```
-FastFeast OLTP exports
-        │
-        ▼
-┌─────────────────────────────────────────────────────────┐
-│                     ingestion/                           │
-│  BatchWatcherThread ──┐                                  │
-│                        ├──▶ Queue[Path] ──▶ runner loop │
-│  StreamWatcherThread ─┘                                  │
-│  (watchdog — OS inotify)    tracker · reader             │
-└──────────────────────┬──────────────────────────────────┘
-                       │ clean DataFrames
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                    validation/                           │
-│  schema · nulls · formats · duplicates · orphans · PII  │
-└──────────────────────┬──────────────────────────────────┘
-                       │ validated DataFrames
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                   transformation/                        │
-│  dim_transformer · fact_transformer · sla_calculator    │
-└──────────────────────┬──────────────────────────────────┘
-                       │ transformed DataFrames
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                     loading/                             │
-│  dim_loader · fact_loader · db_connector (PostgreSQL)   │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                    warehouse/                            │
-│  schema_builder · analytics_builder · date_dim_builder  │
-│  SLA metrics · revenue impact · ticket summaries        │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-              Power BI Dashboard
+                                    BATCH DATA                            STREAM DATA
+                                (Daily CSV snapshots)               (Real-time JSON events)
+                                        │                                      │
+                                        ▼                                      ▼
+                                ┌─────────────────────────────────────────────────────────┐
+                                │                     ingestion/                           │
+                                │  BatchWatcherThread ──┐                                  │
+                                │                        ├──▶ Queue[Path] ──▶ runner loop │
+                                │  StreamWatcherThread ─┘                                  │
+                                │  (watchdog — OS inotify)    tracker · reader             │
+                                └──────────────────────┬──────────────────────────────────┘
+                                                       │ clean DataFrames
+                                                       ▼
+                                ┌─────────────────────────────────────────────────────────┐
+                                │                    validation/                           │
+                                │  schema · nulls · formats · duplicates · orphans · PII  │
+                                └──────────────────────┬──────────────────────────────────┘
+                                                       │ 
+                                                       │
+                                                ┌──────┴──────┐
+                                                ↓             ↓
+                                              [PASS]       [FAIL]
+                                                ↓             ↓
+                                                │      ┌──────────────┐
+                                                │      │  QUARANTINE  │
+                                                │      │ (bad records)│
+                                                │      └──────────────┘
+                                                │ 
+                                                │  
+                                                ↓  validated DataFrames
+                                                ┌──────────────────────────┐
+                                                │   FK CHECKER / ORPHAN    │
+                                                │   VALIDATOR              │
+                                                │  (check refs vs DWH)     │
+                                                └────────┬─────────────────┘
+                                                         │
+                                                  ┌──────┴─────────┐
+                                                  ↓                ↓
+                                               [CLEAN]        [ORPHAN]
+                                                  ↓                ↓
+                                                  │         ┌─────────────────┐
+                                                  │         │ ORPHAN QUEUE    │
+                                                  │         │ (24h retry loop)│
+                                                  │         └─────────────────┘
+                                                  ↓
+                                                  ┌─────────────────────────┐
+                                                  │  DIMENSION LOADER       │
+                                                  │  (INSERT w/ idempotency)│
+                                                  └────────┬────────────────┘
+                                                           ↓
+                                                  ┌─────────────────────────┐
+                                                  │  FACT LOADER            │
+                                                  │  (SLA calcs, date keys) │
+                                                  └────────┬────────────────┘
+                                                           ↓
+                                                    PostgreSQL DWH
+                                                    ├─ dim_customer
+                                                    ├─ dim_driver
+                                                    ├─ dim_restaurant
+                                                    ├─ dim_agent
+                                                    ├─ dim_region
+                                                    ├─ fact_order
+                                                    ├─ fact_ticket
+                                                    └─ fact_ticket_event
 ```
 
 ---
@@ -84,131 +112,96 @@ FastFeast OLTP exports
 
 ```
 FastFeastETL/
+├── datawarehouse/                             # PostgreSQL warehouse layer
+│   ├── db_connection.py                       # Thread-safe connection pool
+│   ├── dim_loader.py                          # Dimension table INSERT
+│   ├── fact_loader.py                         # Fact table INSERT + SLA calcs
+│   ├── file_log.py                            # Pipeline audit trail
+│   ├── fk_checker.py                          # FK validation vs existing PKs
+│   ├── loading_into_DW.py                     # Loading data into DW
+│   └── master_seeder.py                       # Seed master data at startup
+│   └── quarantine_loader.py                   # Rejected record storage
+│   ├── schema_init.py                         # Create Postgres schema
+|   ├── schema_ddl.sql                         # Postgres DDL (dims + facts)
+|   ├── schema_ddl_old_checkconstraint.sql  
+|   ├── stored_procedure_true_orphans.sql      # Orphan promotion logic
 │
-├── main.py                         # single entry point
+├── ingestion/                                 # Source data handling
+│   ├── file_reader.py                         # CSV/JSON parsing
+│   ├── file_tracker.py                        # Idempotency via MD5 hashing
+│   ├── file_watcher.py                        # Watcher threads for batch , stream
+│   └── ingestion_runner.py                    # Orchestration & watchers
 │
-├── config/
-│   ├── config_loader.py            # loads + caches config once
-│   └── pipeline_config.yaml        # all settings — no hardcoding
+├── validation/                                # Data quality layer
+│   ├── schema_registry.py                     # Source schema definitions
+|   ├── schema_validator.py                    # Type coercion & nullability
+│   ├── batch_records_validator.py             # Batch record-level checks
+|   ├── stream_records_validator.py            # Stream record-level checks
+|   ├── orphan_validator.py                    # FK orphan detection
+│   ├── pii_handler.py                         # Hash PII fields
+│   ├── fault_handler.py                       # Reject record dispatch
+│   └── validation_runner.py                   # Validation orchestration
 │
-├── ingestion/
-│   ├── __init__.py
-│   ├── ingestion_runner.py         # orchestrates ingestion phase
-│   ├── file_watcher.py             # batch + stream file discovery
-│   ├── file_tracker.py             # SQLite idempotency tracking
-│   └── file_reader.py              # CSV / JSON → DataFrame
+├── scripts/                                   # Data generators & utilities
+│   ├── generate_master_data.py                # Initialize dimensions
+│   ├── generate_batch_data.py                 # Daily batch snapshots
+│   ├── generate_stream_data.py                # Hourly stream events
+│   ├── add_new_customers.py                   # Add customers (orphan test)
+│   ├── add_new_drivers.py                     # Add drivers (orphan test)
+│   ├── simulate_day.py                        # Full day simulation
 │
-├── validation/
-│   ├── __init__.py
-│   ├── schema_validator.py         # required columns + types
-│   ├── record_validator.py         # nulls, email, phone, dates, ranges
-│   ├── duplicate_detector.py       # primary key deduplication
-│   ├── pii_handler.py              # hash / drop PII fields
-│   ├── orphan_checker.py           # FK validation + orphan rate
-│   ├── quarantine.py               # rejected record storage
-│   └── validation_runner.py        # orchestrates validation phase
-│
-├── transformation/
-│   ├── __init__.py
-│   ├── dim_transformer.py          # normalize, cast, surrogate keys
-│   ├── fact_transformer.py         # enrich orders, tickets, events
-│   ├── sla_calculator.py           # response time, breach flag, reopen
-│   └── transformation_runner.py    # orchestrates transformation phase
-│
-├── loading/
-│   ├── __init__.py
-│   ├── dim_loader.py               # upsert dimensions
-│   ├── fact_loader.py              # insert facts
-│   ├── db_connector.py             # PostgreSQL connection
-│   └── loader_runner.py            # orchestrates loading phase
-│
-├── warehouse/
-│   ├── __init__.py
-│   ├── schema_builder.py           # CREATE dim + fact tables
-│   ├── date_dim_builder.py         # date dimension
-│   ├── analytics_builder.py        # SLA, revenue, quality views
-│   └── dwh_manager.py              # init schema + run OLAP calcs
-│
-├── monitoring/
-│   ├── __init__.py
-│   ├── logger.py                   # JSON structured logging (QueueListener)
-│   ├── log_formatter.py            # step-level log format
-│   ├── log_rotator.py              # auto-delete logs older than N days
-│   ├── metrics_collector.py        # quality metrics accumulator
-│   └── alerter.py                  # async email alerts on failure only
-│
-├── reporting/
-│   ├── __init__.py
-│   ├── pdf_builder.py              # daily quality PDF report
-│   ├── report_emailer.py           # attach + send PDF by email
-│   └── report_runner.py            # orchestrates daily report
-│
-├── scripts/
-│   ├── generate_master_data.py     # creates base OLTP tables (once)
-│   ├── generate_batch_data.py      # daily dimension snapshots
-│   ├── generate_stream_data.py     # hourly transaction files
-│   ├── add_new_customers.py        # simulate new signups
-│   └── add_new_drivers.py          # simulate new drivers
-│
-├── utils/
-│   └── logger.py
+├── config/                                    # Configuration files
+│   ├── config_loader.py                       # YAML config loading
+│   ├── pipeline_config.yaml                   # File types, expected files, FK rules
 │
 ├── data/
+│   ├── master/                                # Base dimensions (CSV)
+│   │   ├── regions.csv
+│   │   ├── categories.csv
+│   │   ├── customers.csv
+│   │   ├── drivers.csv
+│   │   ├── restaurants.csv
+│   │   ├── agents.csv
+│   │   ├── segments.csv
+│   │   ├── teams.csv
+│   │   ├── channels.csv
+│   │   ├── priorities.csv
+│   │   ├── reasons.csv
+│   │   ├── reason_categories.csv
+│   │   ├── cities.csv
+│   │   └── metadata.json
+│   │
+│   ├── quarantine/                            # Rejected records (CSV)
+|   |
 │   ├── input/
-│   │   ├── batch/YYYY-MM-DD/       # dimension files (flat folder)
-│   │   └── stream/YYYY-MM-DD/HH/  # fact files (hourly subfolders)
-│   ├── tracker/                    # SQLite idempotency database
-│   └── quarantine/                 # rejected records
+│   │   ├── batch/                             # Daily batch snapshots
+│   │   │   └── YYYY-MM-DD/
+│   │   └── stream/                            # Hourly stream events
+│   │       └── YYYY-MM-DD/HH/
+│   │
+│   └── tracker/
+│       ├── pipeline_tracker.db                 # SQLite idempotency DB
+
 │
-└── logs/
-    └── pipeline_YYYY-MM-DD.log     # one JSON log file per day
+├── logs/                                       # Application logs
+│   ├── pipeline_YYYY-MM-DD.log
+│
+├── utils/                                      # Shared utilities
+│   ├── logger.py                               # Logging config
+│   ├── alerter.py                              # Alert notifications
+│   ├── sla_updater_job.py                      # calculating SLA metrics from fact_ticket
+
+│
+├── main.py                                     # Application entry point
+└── README.md                                   # This file
+└── README_datawarehouse.md     
 ```
 
 ---
 
-## Pipeline Phases
+## Features
 
-### Phase 1 — Ingestion
-Discovers files from `data/input/batch/` and `data/input/stream/` using two dedicated daemon threads. Reads CSV and JSON files into raw DataFrames. Tracks every processed file by MD5 hash in SQLite to guarantee idempotency — re-running the pipeline never duplicates data.
-
-### Phase 2 — Validation
-Validates every record against schema rules, business rules, and referential integrity. Rejects invalid records to quarantine without stopping the pipeline. Detects duplicates, validates email/phone formats, checks numeric ranges, and masks PII before it reaches the analytics layer.
-
-### Phase 3 — Transformation
-Normalizes dimension data, assigns surrogate keys, enriches fact records with date keys, and calculates SLA metrics — first response time, resolution time, breach flags, and reopen rates — entirely in the OLAP layer.
-
-### Phase 4 — Loading
-Upserts dimension records (insert new, update changed) and inserts fact records into PostgreSQL. All writes are idempotent — `ON CONFLICT DO UPDATE` prevents duplicates at the database level.
-
-### Phase 5 — Warehouse / OLAP
-Builds and maintains the dimensional model in PostgreSQL. Creates analytical views for SLA monitoring, revenue impact, complaint rates, and data quality metrics.
-
----
-
-## Data Flow
-
-**Batch files** (13 dimension files, daily):
-```
-data/input/batch/2026-02-20/
-├── customers.csv     → Dim_Customer
-├── drivers.csv       → Dim_Driver
-├── agents.csv        → Dim_Agent
-├── restaurants.json  → Dim_Restaurant
-├── cities.json       → Dim_City
-└── ...               → ...
-```
-
-**Stream files** (3 fact files, continuously):
-```
-data/input/stream/2026-02-20/09/
-├── orders.json        → Fact_Order
-├── tickets.csv        → Fact_Ticket
-└── ticket_events.json → Fact_Ticket_Event
-```
-
----
-
-## Threading Model
+### Threading Model
 
 The pipeline uses dedicated daemon threads to keep every I/O operation off the main processing loop:
 
@@ -222,11 +215,66 @@ The pipeline uses dedicated daemon threads to keep every I/O operation off the m
 
 All threads communicate through thread-safe `Queue` objects. The pipeline main loop never blocks on disk I/O.
 
+
+### Dual-Mode Data Ingestion
+
+**Batch Processing**
+- Daily CSV, JSON snapshots from `data/input/batch/{YYYY-MM-DD}/`
+- Scheduled ingestion with file-based watchers
+- Supports: customers, drivers, agents, restaurants, regions, categories, etc.
+- Idempotency via MD5 hash tracking in SQLite
+
+**Stream Processing**
+- Real-time CSV, JSON events from `data/input/stream/{YYYY-MM-DD}/{HH}/`
+- Hourly file watchers for continuous data flow
+- Supports: orders, tickets, ticket_events
+- Orphan queuing for unresolved foreign keys
+
+
+### ✅ Schema Validation & Data Quality
+
+- **Type Coercion** - Automatic casting (int, float, datetime, boolean)
+- **Nullability Checks** - Enforce required vs. optional columns
+- **Business Rules** - Custom validation constraints per data type
+- **PII Masking** - Hash sensitive fields (email, phone)
+- **Rejection Handling** - Quarantine invalid records for manual review
+
+### 🔗 Foreign Key Integrity & Orphan Detection
+
+- **Real-time FK Checks** - Validate references against existing PKs
+- **Orphan Queuing** - Quarantine records with unresolved FKs
+- **24-Hour Grace Period** - Allow time for parent records to arrive
+- **True Orphan Detection** - SQL stored procedure promotes unrecoverable orphans
+- **Retry Mechanism** - Re-ingest orphans once parent arrives
+
+  
+---
+
+### 💾 PostgreSQL Dimensional Warehouse
+
+**Dimension Tables**
+- `dim_customer` - Customer master data
+- `dim_driver` - Driver master data
+- `dim_restaurant` - Restaurant master data
+- `dim_agent` - Customer service agent master data
+- `dim_region`, `dim_category`, `dim_segment`, `dim_team`, `dim_channel`, `dim_priority`, `dim_reason`
+
+**Fact Tables**
+- `fact_order` - Order transactions with SLA tracking
+- `fact_ticket` - Customer support tickets with SLA breach flags
+- `fact_ticket_event` - Ticket status transitions and activities
+
+**Analytics Tables**
+- `pipeline_file_log` - Audit trail of every file processed
+- `quarantine` - Rejected records (JSONB format)
+- `true_orphan` - Permanently unresolved orphans
+
+
 ---
 
 ## Configuration
 
-All settings live in `config/pipeline_config.yaml` — nothing is hardcoded:
+All settings live in `config/pipeline_config.yaml` — nothing is hardcoded, defines file types, watchers, validation rules, and FK relationships.:
 
 ```yaml
 watcher:
@@ -251,6 +299,25 @@ tracker:
 logging:
   dir: "logs"
   retention_days: 7
+
+alerting:
+  enabled: True
+  smtp:
+    host: "smtp.gmail.com"
+    port: 587
+    user_name: "your_email@gmail.com"
+    password: "YOUR_APP_PASSWORD_HERE"
+    sender: "your_email@gmail.com"
+    receivers: 
+      - "your_email@gmail.com"
+
+schemas:
+  customers:
+    primary_key: customer_id
+    columns:
+      - { name: region_id,         dtype: int,   nullable: false }
+
+  # ... all tables
 ```
 
 ---
@@ -266,12 +333,6 @@ python scripts/generate_master_data.py
 # 2. create daily dimension snapshots
 python scripts/generate_batch_data.py --date 2026-02-20
 
-# 3. simulate new customer signups (optional)
-python scripts/add_new_customers.py --count 5
-
-# 4. simulate new driver onboarding (optional)
-python scripts/add_new_drivers.py --count 3
-
 # 5. generate hourly stream files throughout the day
 python scripts/generate_stream_data.py --date 2026-02-20 --hour 9
 python scripts/generate_stream_data.py --date 2026-02-20 --hour 14
@@ -281,44 +342,30 @@ python scripts/generate_stream_data.py --date 2026-02-20 --hour 14
 
 ## Getting Started
 
-**1. Clone the repository**
+### 1. Clone the Repository
+
 ```bash
 git clone https://github.com/omar-galaleldeen/FastFeastETL.git
 cd FastFeastETL
 ```
 
-**2. Create a virtual environment**
+### 2. Create Virtual Environment
+
 ```bash
 python -m venv venv
-source venv/bin/activate        # Linux / Mac
-venv\Scripts\activate           # Windows
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-**3. Install dependencies**
-```bash
-pip install -r requirements.txt
-```
 
-**4. Generate test data**
+### 3. Generate Test Data
+
 ```bash
 python scripts/generate_master_data.py
 python scripts/generate_batch_data.py --date 2026-02-20
 python scripts/generate_stream_data.py --date 2026-02-20 --hour 9
 ```
 
-**5. Run the pipeline**
-```bash
-python main.py
-```
-
-**6. Generate more streaming data**
-```bash
-python scripts/generate_stream_data.py --date 2026-02-20 --hour 9 10 11 12
-```
-
----
-
-## Running the Pipeline
+### 4. Start the Pipeline
 
 ```bash
 python main.py
@@ -335,22 +382,63 @@ Expected startup logs:
 {"time": "2026-02-20 06:00:00", "level": "INFO", "module": "ingestion_runner", "msg": "[runner] loop started"}
 ```
 
+### 5. Generate more streaming data
+```bash
+python scripts/generate_stream_data.py --date 2026-02-20 --hour 9 10 11 12
+```
+
 ---
 
-## Testing
+### Monitoring
 
-Individual component tests are provided to verify each module in isolation:
-
+**Check Pipeline Logs**
 ```bash
-# test batch file discovery
-python test_watcher_batch.py
-
-# test stream file detection (watchdog)
-python test_watcher_stream.py
-
-# test tracker idempotency on real data
-python test_tracker_real.py
+tail -f logs/pipeline_YYYY-MM-DD.log
 ```
+
+**Query Pipeline File Log**
+```sql
+SELECT file_name, status, total_records, valid_records, quarantined 
+FROM pipeline_file_log 
+ORDER BY processed_at DESC LIMIT 20;
+```
+
+**Check Quarantine**
+```sql
+SELECT source_table, rejection_stage, COUNT(*) 
+FROM quarantine 
+GROUP BY source_table, rejection_stage;
+```
+
+**Monitor Orphans**
+```sql
+SELECT source_table, COUNT(*) 
+FROM quarantine 
+WHERE rejection_stage = 'orphan' 
+GROUP BY source_table;
+```
+
+---
+
+
+## Orphan Handling
+
+FastFeastETL implements a sophisticated orphan resolution strategy:
+
+### Detection
+1. **Ingestion** - Stream orders arrive referencing customer_id=999
+2. **FK Check** - fk_checker queries dim_customer, finds no match
+3. **Quarantine** - Record marked as 'orphan' in quarantine table
+
+### Resolution Window (24 hours)
+1. **Next Batch** - Batch data loads the missing customer (customer_id=999)
+2. **Retry Promotion** - SQL query `v_pending_orphans` finds resolvable records
+3. **Re-ingest** - Orphan record is pulled from quarantine and reprocessed
+
+### Permanent Orphans
+1. **24-Hour Check** - `promote_true_orphans()` stored procedure runs
+2. **Final Validation** - Checks if parent STILL doesn't exist
+3. **True Orphan** - Record moved to `true_orphan` table for investigation
 
 ---
 
@@ -383,3 +471,7 @@ Alerts are sent by email **only on failure** — never on successful processing.
 | Configuration | YAML (`pyyaml`) |
 | Idempotency tracking | SQLite (`sqlite3`) |
 | Threading | Python `threading` + `concurrent.futures` |
+
+---
+
+
