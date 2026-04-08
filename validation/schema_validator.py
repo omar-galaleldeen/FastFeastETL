@@ -41,7 +41,10 @@ class schema_validator():
         Handle schema validation failure - log and send alerts without crashing
         """
         try:
-            #send_alert("Schema Validation" , message)
+            send_alert(
+                    error="Schema Validation failure",
+                    message= f"Required Columns don't exist in {self.file_name}"
+                )
             pass
         except Exception as e:
             logger.error(f"Error handling validation failure: {e}")
