@@ -88,18 +88,20 @@ class batch_records_validator():
         str_cols = df.select_dtypes(include=['object', 'string']).columns
         if len(str_cols) == 0:
             return True, df, None
-        
-        empty_mask = df[str_cols].apply(lambda col: col.astype(str).str.strip() == "").any(axis=1)
+
+        invalid_names = {"", "nan", "null", "none", "na", "n/a"}
+
+        empty_mask = df[str_cols].apply(lambda col: col.astype(str).str.strip().str.lower().isin(invalid_names)).any(axis=1)
         empty_rows = df[empty_mask]
         count_empty = empty_rows.shape[0]
+
         if empty_rows.empty:
             return True, df, None
-        
-        print(f"Found Empty Values in {self.file_name} → {count_empty}")
-        logger.error(f"Found {count_empty} empty values in {self.file_name}")
+
+        print(f"Found Empty/Placeholder Values in {self.file_name} → {count_empty}")
+        logger.error(f"Found {count_empty} empty/placeholder values in {self.file_name}")
         cleaned_df = df[~empty_mask].reset_index(drop=True)
-        return False, cleaned_df, empty_rows
-    
+        return False, cleaned_df, empty_rows  
     
     def validate_duplicates(self, df, pk):
         duplicated_mask = df.duplicated(subset=[pk])

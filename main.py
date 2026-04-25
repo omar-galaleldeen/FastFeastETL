@@ -3,6 +3,8 @@ import sys
 import logging
 from utils.logger import get_logger
 from ingestion import ingestion_runner
+from utils.sla_updater_job import sla_scheduler_loop
+import threading
 
 # Initialize root logger
 logger = get_logger(__name__)
@@ -15,8 +17,12 @@ def main():
     print("=====================================================\n")
 
     try:
-        subprocess.Popen([sys.executable, "-m", "utils.sla_updater_job"])
-        logger.info("SLA updater started in background")
+        sla_thread = threading.Thread(
+            target=sla_scheduler_loop,
+            args=(ingestion_runner._stop_evt,),
+            daemon=True)
+        sla_thread.start()
+        logger.info("SLA updater started in background")        
     except Exception as e:
         print(f"⚠️ Warning: Could not start SLA Updater: {e}")
 
