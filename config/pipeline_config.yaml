@@ -3,13 +3,13 @@ database:
   port:     5432
   user:     postgres
   password: "admin"         
-  dbname:   fastfeastapp
+  dbname:   fastfeastapp4
 
 
 watcher:
   batch:
     dir: "data/input/batch"
-    trigger_hour: 10
+    trigger_hour: 0
     expected_files:
 
       customers.csv:

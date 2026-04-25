@@ -45,8 +45,8 @@ MASTER_DIR = Path(_cfg.get("master", {}).get("dir", "data/master"))
 # validation_runner, and dim_loader.
 # Order matters: parent dims before children (region before customer, etc.)
 MASTER_FILES: list[tuple[str, str]] = [
+    ("cities.csv",            "cities"),           # .csv in master, .json in batch — MUST come before regions
     ("regions.csv",           "regions"),
-    ("cities.csv",            "cities"),           # .csv in master, .json in batch
     ("segments.csv",          "segments"),
     ("categories.csv",        "categories"),
     ("teams.csv",             "teams"),

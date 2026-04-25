@@ -118,6 +118,37 @@ def load_orders(df: pd.DataFrame) -> int:
     )
 
 
+def _fetch_order_region_map(order_ids: list) -> dict[str, int]:
+    """
+    Fetch {order_id: region_id} from fact_order for the given order_ids.
+    Used by load_tickets() to derive region_id, which is not present in
+    tickets.csv but is needed in fact_ticket for regional analytics.
+    """
+    if not order_ids:
+        return {}
+
+    # Filter out None values
+    valid_ids = [oid for oid in order_ids if oid is not None]
+    if not valid_ids:
+        return {}
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT order_id, region_id FROM fact_order WHERE order_id = ANY(%s)',
+            (valid_ids,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        return {str(row[0]): row[1] for row in rows if row[1] is not None}
+    except Exception as exc:
+        logger.warning(f"[fact_loader] Could not fetch order→region map: {exc}")
+        return {}
+    finally:
+        put_conn(conn)
+
+
 def load_tickets(df: pd.DataFrame) -> int:
     """
     Load fact_ticket.
@@ -127,9 +158,19 @@ def load_tickets(df: pd.DataFrame) -> int:
       - sla_response_breached : actual > sla_first_due_at
       - sla_resolution_breached : actual > sla_resolve_due_at
       - reopened            : status == 'Reopened'
+
+    region_id is not present in tickets.csv — it is derived by looking up
+    the ticket's order_id in fact_order, which already has region_id populated
+    from orders.json.
     """
     if df.empty:
         return 0
+
+    # Derive region_id from fact_order via order_id
+    order_id_list    = _safe(df, "order_id")
+    order_region_map = _fetch_order_region_map(order_id_list)
+    region_ids       = [order_region_map.get(str(oid)) if oid is not None else None
+                        for oid in order_id_list]
 
     created      = pd.to_datetime(_safe(df, "created_at"),         errors="coerce")
     first_resp   = pd.to_datetime(_safe(df, "first_response_at"),  errors="coerce")
@@ -156,7 +197,7 @@ def load_tickets(df: pd.DataFrame) -> int:
         _safe(df, "ticket_id"),
         _safe(df, "order_id"),
         _safe(df, "customer_id"),
-        _safe(df, "region_id"),
+        region_ids,
         _safe(df, "restaurant_id"),
         _safe(df, "driver_id"),
         _safe(df, "agent_id"),

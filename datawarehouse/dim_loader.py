@@ -20,6 +20,11 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Module-level city lookup cache.
+# Populated by load_cities() and consumed by load_regions().
+# Keyed by city_id as a plain integer string (e.g. "1"), value is city_name.
+_city_cache: dict[str, str] = {}
+
 
 # ── Generic insert helper ─────────────────────────────────────────────────────
 
@@ -168,17 +173,39 @@ def load_agents(df: pd.DataFrame) -> int:
 
 
 def load_regions(df: pd.DataFrame) -> int:
+    # regions.csv has city_id but not city_name.
+    # city_name is denormalised here by looking up dim_region_city_map,
+    # which is populated by load_cities() called just before this in the
+    # seeding / batch load order.  If the map is empty (cities not yet
+    # loaded) city_name is left NULL — it will be filled on the next run.
+    city_map = _fetch_city_map()
+
+    city_id_list = _safe(df, "city_id")
+    city_names   = [city_map.get(str(v).split(".")[0]) for v in city_id_list]
+
     rows = list(zip(
         _safe(df, "region_id"),
         _safe(df, "region_name"),
+        city_names,
         _safe(df, "delivery_base_fee"),
     ))
     return _insert(
         table   = "dim_region",
-        columns = ["region_id","region_name","delivery_base_fee"],
+        columns = ["region_id", "region_name", "city_name", "delivery_base_fee"],
         rows    = rows,
         pk_col  = "region_id",
     )
+
+
+def _fetch_city_map() -> dict[str, str]:
+    """
+    Return {city_id_str: city_name} from the module-level _city_cache.
+    The cache is populated by load_cities() which must run before load_regions()
+    in the same pipeline session.  If load_cities() hasn't run yet (e.g. a
+    partial run), the cache is empty and city_name will be NULL until the
+    next full batch load.
+    """
+    return _city_cache
 
 
 def load_categories(df: pd.DataFrame) -> int:
@@ -252,18 +279,49 @@ def load_priorities(df: pd.DataFrame) -> int:
     )
 
 
+def _fetch_reason_category_map() -> dict[str, str]:
+    """Return {reason_category_id_str: category_name} from dim_reason_category.
+    dim_reason_category must already be loaded before this is called.
+    """
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT reason_category_id, category_name FROM "dim_reason_category"')
+        rows = cur.fetchall()
+        cur.close()
+        return {str(row[0]): row[1] for row in rows}
+    except Exception as exc:
+        logger.warning(f"[dim_loader] Could not fetch reason category map: {exc}")
+        return {}
+    finally:
+        put_conn(conn)
+
+
 def load_reasons(df: pd.DataFrame) -> int:
+    # reason_category is a denormalised copy of dim_reason_category.category_name.
+    # Fetch the lookup now — dim_reason_category is guaranteed to be loaded first
+    # (master seed order: reason_categories before reasons).
+    reason_cat_map = _fetch_reason_category_map()
+
+    reason_cat_id_list = _safe(df, "reason_category_id")
+    # Normalise float IDs like 1.0 → "1" before lookup
+    reason_cat_names = [
+        reason_cat_map.get(str(v).split(".")[0]) if v is not None else None
+        for v in reason_cat_id_list
+    ]
+
     rows = list(zip(
         _safe(df, "reason_id"),
         _safe(df, "reason_name"),
-        _safe(df, "reason_category_id"),
+        reason_cat_id_list,
+        reason_cat_names,
         _safe(df, "severity_level"),
         _safe(df, "typical_refund_pct"),
     ))
     return _insert(
         table   = "dim_reason",
-        columns = ["reason_id","reason_name","reason_category_id",
-                   "severity_level","typical_refund_pct"],
+        columns = ["reason_id", "reason_name", "reason_category_id",
+                   "reason_category", "severity_level", "typical_refund_pct"],
         rows    = rows,
         pk_col  = "reason_id",
     )
@@ -284,12 +342,34 @@ def load_reason_categories(df: pd.DataFrame) -> int:
 
 def load_cities(df: pd.DataFrame) -> int:
     """
-    Cities are denormalised into dim_region — we just log and skip.
-    The region loader handles the city_name column from cities.json.
+    Cities are denormalised into dim_region.city_name.
+
+    dim_region has no city_id column, so a DB-side UPDATE is not possible.
+    Instead, this function populates the module-level _city_cache with
+    {city_id_str: city_name}.  load_regions() reads that cache at INSERT
+    time to resolve city_name for each region row.
+
+    Seeding order in master_seeder.py guarantees cities is processed before
+    regions, so the cache is always populated when load_regions() runs.
+
+    Returns the number of cities cached.
     """
-    logger.info(f"[dim_loader] cities.json received ({len(df)} rows) — "
-                "city data is denormalised into dim_region, skipping direct load.")
-    return 0
+    if df.empty:
+        return 0
+
+    global _city_cache
+    _city_cache = {
+        str(row["city_id"]).split(".")[0]: row["city_name"]
+        for _, row in df.iterrows()
+        if row.get("city_name") and row.get("city_id") is not None
+    }
+
+    if not _city_cache:
+        logger.warning("[dim_loader] cities df had no usable city_id/city_name pairs")
+        return 0
+
+    logger.info(f"[dim_loader] city cache populated — {len(_city_cache)} cities")
+    return len(_city_cache)
 
 
 # ── Dispatcher ────────────────────────────────────────────────────────────────
