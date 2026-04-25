@@ -60,7 +60,7 @@ class validation_runner:
             print(f"Schema validation failed completely in {self.original_file_name}")
             fh.move_to_quarantine(rejected_df, "Records failed in schema validation", self.file_type)
             processed_timestamp = datetime.now().isoformat(sep=" ")
-            return False, clean_df, self.original_file_name, processed_timestamp
+            return False, clean_df, self.original_file_name, processed_timestamp, 0
 
         if not rejected_df.empty:
             print(f"Records failed in schema validation: {rejected_df.shape[0]}")
@@ -87,6 +87,7 @@ class validation_runner:
                 }
             )
             valid_records_df = batch_valid_df
+            orphan_count = 0  # batch files are not subject to orphan checks
 
         elif self.file_type == "stream":
             stream_records_validation = srv.stream_records_validator(
@@ -109,6 +110,8 @@ class validation_runner:
             orphan_validator_obj = ov.orphan_validator(stream_valid_df, self.file_name)
             final_stream_valid_df, orphan_df = orphan_validator_obj.run()
 
+            orphan_count = len(orphan_df) if orphan_df is not None and not orphan_df.empty else 0
+
             if orphan_df is not None and not orphan_df.empty:
                 fh.move_to_quarantine(
                     orphan_df,
@@ -128,4 +131,4 @@ class validation_runner:
             secured_records_df = valid_records_df
 
         processed_timestamp = datetime.now().isoformat(sep=" ")
-        return True, secured_records_df, self.original_file_name, processed_timestamp
+        return True, secured_records_df, self.original_file_name, processed_timestamp, orphan_count

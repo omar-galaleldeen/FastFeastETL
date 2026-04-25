@@ -2,8 +2,8 @@ database:
   host:     localhost
   port:     5432
   user:     postgres
-  password: "admin"         
-  dbname:   fastfeastapp4
+  password: ${PGPASSWORD}
+  dbname:   fastfeast
 
 
 watcher:
@@ -23,11 +23,11 @@ watcher:
       reasons.csv:
         table: "Dim_Reason"
       categories.csv:
-        table: "Dim_Restaurant"
+        table: "Dim_Category"
       segments.csv:
-        table: "Dim_Customer"
+        table: "Dim_Segment"
       teams.csv:
-        table: "Dim_Agent"
+        table: "Dim_Team"
       channels.csv:
         table: "Dim_Channel"
       priorities.csv:
@@ -93,11 +93,11 @@ alerting:
   smtp:
     host: "smtp.gmail.com"
     port: 587
-    user_name: "your_email@gmail.com"
-    password: "YOUR_APP_PASSWORD_HERE"
-    sender: "your_email@gmail.com"
+    user_name: ${SMTP_USER}
+    password: ${SMTP_PASSWORD}
+    sender: ${SMTP_SENDER}
     receivers: 
-      - "your_email@gmail.com"
+      - ${SMTP_RECEIVER}
 
 # ============================================================
 # SCHEMAS

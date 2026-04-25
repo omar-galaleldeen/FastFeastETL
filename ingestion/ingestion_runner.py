@@ -117,7 +117,7 @@ def _process_file(path: Path) -> None:
             file_path   = file_path,
             source_table= source_table,   # passed through to fault_handler
         )
-        is_valid, clean_df, out_filename, processed_ts = validator.run()
+        is_valid, clean_df, out_filename, processed_ts, orphan_count = validator.run()
 
         if not is_valid:
             error_msg = f"Schema validation failed completely for {filename}"
@@ -183,6 +183,7 @@ def _process_file(path: Path) -> None:
         total_records   = total_records,
         valid_records   = records_loaded,
         quarantined     = quarantined_count,
+        orphan_count    = orphan_count,
     )
 
     logger.info(

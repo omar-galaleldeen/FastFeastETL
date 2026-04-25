@@ -150,14 +150,32 @@ class BatchWatcherThread(threading.Thread):
             logger.warning(f"[batch] today_dir not found: {today_dir}")
             return
 
-        found = (
-            sorted(today_dir.glob("*.csv")) +
-            sorted(today_dir.glob("*.json"))
-        )
+        # Explicit FK-safe order: parent dimensions must be loaded before
+        # any child that references them via a foreign key.
+        # e.g. regions before customers/drivers/restaurants,
+        #      teams before agents, reason_categories before reasons.
+        # Alphabetical glob order is NOT used here because it would process
+        # agents.csv before teams.csv, breaking team_id FK constraints.
+        LOAD_ORDER = [
+            "cities.json",
+            "regions.csv",
+            "segments.csv",
+            "categories.csv",
+            "teams.csv",
+            "reason_categories.csv",
+            "reasons.csv",
+            "channels.csv",
+            "priorities.csv",
+            "customers.csv",
+            "restaurants.json",
+            "drivers.csv",
+            "agents.csv",
+        ]
 
         queued = 0
-        for f in found:
-            if f.name in BATCH_FILES :
+        for fname in LOAD_ORDER:
+            f = today_dir / fname
+            if f.exists() and f.name in BATCH_FILES:
                 self.file_queue.put(f)
                 queued += 1
 
