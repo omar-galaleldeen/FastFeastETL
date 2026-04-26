@@ -189,9 +189,25 @@ class stream_records_validator():
         if len(str_cols) == 0:
             return True, df, None
 
+        # Only enforce non-empty on columns that are NOT nullable in the schema.
+        # Nullable string columns (e.g. old_status, notes) legitimately hold
+        # empty/null values and must not be rejected here.
+        # old_status is None for every ticket creation event — rejecting it
+        # would quarantine ~1/3 of all ticket_events, which is exactly the
+        # elevated rejection rate that was observed in the logs.
+        nullable_cols = {
+            col.name
+            for col in self.expected_schema.columns
+            if col.nullable
+        }
+        cols_to_check = [c for c in str_cols if c not in nullable_cols]
+
+        if not cols_to_check:
+            return True, df, None
+
         invalid_names = {"", "nan", "null", "none", "na", "n/a"}
 
-        empty_mask = df[str_cols].apply(lambda col: col.astype(str).str.strip().str.lower().isin(invalid_names)).any(axis=1)
+        empty_mask = df[cols_to_check].apply(lambda col: col.astype(str).str.strip().str.lower().isin(invalid_names)).any(axis=1)
         empty_rows = df[empty_mask]
         count_empty = empty_rows.shape[0]
 
@@ -201,4 +217,4 @@ class stream_records_validator():
         print(f"Found Empty/Placeholder Values in {self.file_name} → {count_empty}")
         logger.error(f"Found {count_empty} empty/placeholder values in {self.file_name}")
         cleaned_df = df[~empty_mask].reset_index(drop=True)
-        return False, cleaned_df, empty_rows  
+        return False, cleaned_df, empty_rows

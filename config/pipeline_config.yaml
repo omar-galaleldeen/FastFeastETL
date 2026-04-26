@@ -3,7 +3,7 @@ database:
   port:     5432
   user:     postgres
   password: ${PGPASSWORD}
-  dbname:   fastfeast
+  dbname:   fastfeastapp
 
 
 watcher:
@@ -183,7 +183,7 @@ schemas:
     primary_key: customer_id
     columns:
       - { name: customer_id, dtype: int,      nullable: false }
-      - { name: full_name,   dtype: str,      nullable: true  }
+      - { name: full_name,   dtype: str,      nullable: false  }
       - { name: email,       dtype: str,      nullable: true  }
       - { name: phone,       dtype: str,      nullable: true  }
       - { name: region_id,   dtype: float,    nullable: true  }
@@ -197,7 +197,7 @@ schemas:
     primary_key: restaurant_id
     columns:
       - { name: restaurant_id,     dtype: int,      nullable: false }
-      - { name: restaurant_name,   dtype: str,      nullable: true  }
+      - { name: restaurant_name,   dtype: str,      nullable: false  }
       - { name: region_id,         dtype: int,      nullable: true  }
       - { name: category_id,       dtype: int,      nullable: true  }
       - { name: price_tier,        dtype: str,      nullable: true,  allowed_values: [Low, Mid, High] }
@@ -211,7 +211,7 @@ schemas:
     primary_key: driver_id
     columns:
       - { name: driver_id,            dtype: int,      nullable: false }
-      - { name: driver_name,          dtype: str,      nullable: true  }
+      - { name: driver_name,          dtype: str,      nullable: false  }
       - { name: driver_phone,         dtype: str,      nullable: true  }
       - { name: national_id,          dtype: int,      nullable: true  }
       - { name: region_id,            dtype: int,      nullable: true  }
@@ -230,7 +230,7 @@ schemas:
     primary_key: agent_id
     columns:
       - { name: agent_id,            dtype: int,      nullable: false }
-      - { name: agent_name,          dtype: str,      nullable: true  }
+      - { name: agent_name,          dtype: str,      nullable: false }
       - { name: agent_email,         dtype: str,      nullable: true  }
       - { name: agent_phone,         dtype: str,      nullable: true  }
       - { name: team_id,             dtype: int,      nullable: true  }
