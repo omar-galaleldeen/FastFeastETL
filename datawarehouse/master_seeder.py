@@ -181,7 +181,12 @@ def _seed_file(path: Path, file_type_name: str) -> str:
         # detection in validation_runner works correctly.
         # validation_runner strips the extension and lowercases — so passing
         # file_type_name + ".csv" gives it exactly what it needs.
-        logical_filename = f"{file_type_name}.csv"
+        _MASTER_LOGICAL_FILENAME = {
+            "cities":      "cities.json",
+            "restaurants": "restaurants.json",
+        }
+        logical_filename = _MASTER_LOGICAL_FILENAME.get(file_type_name, f"{file_type_name}.csv")
+        #logical_filename = f"{file_type_name}.csv"
 
         validator = validation_runner(
             df,

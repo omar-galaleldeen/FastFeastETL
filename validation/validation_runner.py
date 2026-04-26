@@ -69,6 +69,7 @@ class validation_runner:
         valid_records_df = clean_df
 
         # 2. Batch or Stream specific validation
+        oprhan_count = 0
         if self.file_type == "batch":
             batch_records_validation = brv.batch_records_validator(
                 clean_df, self.expected_schema, self.file_name
