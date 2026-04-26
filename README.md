@@ -103,8 +103,7 @@ FastFeastETL/
 │   ├── quarantine_loader.py          # Write rejected rows to Postgres
 │   └── file_log.py                   # Write audit trail to pipeline_file_log
 │   └── master_seeder.py              # Cold-start dimension loader
-|   ├── schema_ddl.sql                # Postgres DDL (dims + facts)
-|   ├── stored_procedure_true_orphans.sql      # Orphan promotion logic
+|   ├── quarantine_retry.py           # For true orphans
 │
 ├── utils/
 │   ├── logger.py                     # Structured logging
