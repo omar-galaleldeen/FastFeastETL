@@ -1,0 +1,153 @@
+# FastFeast Pipeline — Requirements Deviation & Fallback Analysis
+
+**Summary: 5 Critical · 9 Warnings · 6 Info · 8 Confirmed OK**
+
+---
+
+## CRITICAL — Breaks a Required Behaviour
+
+### 1. `schema_init.py`: dim_date / dim_time INSERT will crash on every restart
+**Files:** `schema_init.py`, `schema_ddl.sql`
+
+The DDL list runs `INSERT INTO dim_date … SELECT generate_series(…)` and the same for `dim_time` unconditionally on every pipeline startup. The first run succeeds. Every subsequent restart hits a primary-key violation, the surrounding `with conn:` context manager rolls back the entire DDL execution block, and the inserts never complete.
+
+Since `fact_order`, `fact_ticket`, and `fact_ticket_event` all carry FK references to `dim_date(date_key)` and `dim_time(time_key)`, any order or ticket inserted after a restart will violate those FKs and be silently dropped by `ON CONFLICT DO NOTHING` in the fact loaders. The pipeline looks healthy while zero fact rows land in the DWH.
+
+**Fix:** Add `ON CONFLICT (date_key) DO NOTHING` / `ON CONFLICT (time_key) DO NOTHING` to both seed inserts.
+
+---
+
+### 2. `pipeline_config.yaml`: Three batch files mapped to wrong DWH tables
+**File:** `pipeline_config.yaml`
+
+In `watcher.batch.expected_files`:
+- `categories.csv` → mapped to `Dim_Restaurant` (correct: `Dim_Category`)
+- `segments.csv` → mapped to `Dim_Customer` (correct: `Dim_Segment`)
+- `teams.csv` → mapped to `Dim_Agent` (correct: `Dim_Team`)
+
+`fk_checker._build_fk_table_map()` derives its entire FK lookup map from this config section. FK checks for restaurant category, customer segment, and agent team will silently resolve against the wrong tables, either falsely passing or falsely failing referential integrity validation for a large portion of stream records.
+
+---
+
+### 3. `ingestion_runner.py`: `orphan_count` is always 0 in `pipeline_file_log`
+**Files:** `ingestion_runner.py`, `validation_runner.py`, `file_log.py`
+
+The requirement explicitly lists **Orphan rate** as a tracked quality metric. `file_log.record()` has an `orphan_count` parameter, but every call site in `_process_file()` omits it (defaults to 0). `validation_runner` knows how many orphans were found but never returns or surfaces that count back to the runner. The monitoring query in `stored_procedure_true_orphans.sql` will always show `orphan_rate_pct = 0%`, making this metric completely meaningless.
+
+---
+
+### 4. `main.py`: SLA updater spawns a detached OS subprocess, not a managed thread
+**Files:** `main.py`, `sla_updater_job.py`
+
+The requirement says background jobs must be asynchronous in a **separate thread**. `main.py` uses `subprocess.Popen([sys.executable, "-m", "utils.sla_updater_job"])` — a separate OS process with no lifecycle management. It is not joined, not stopped on `Ctrl+C`, and not restarted on failure.
+
+Additionally, `sla_updater_job.py` creates its own SQLAlchemy engine directly from credentials, bypassing the shared `ThreadedConnectionPool`. This opens extra connections outside the pool's 10-connection cap and leaks a new engine every 5 minutes (the engine is created inside the `while True` loop).
+
+---
+
+### 5. `stored_procedure_true_orphans.sql`: GOTO is not valid PostgreSQL — function won't compile
+**File:** `stored_procedure_true_orphans.sql`
+
+`promote_true_orphans()` uses `GOTO do_promote;` and `<<do_promote>>` labels. PostgreSQL's PL/pgSQL has no `GOTO` statement. Running `psql -f stored_procedure_true_orphans.sql` will throw a syntax error — the function is never created. Orphan promotion after the 24-hour window (a core pipeline feature) is completely non-functional until rewritten using `EXIT`, nested blocks, or extracted helper functions.
+
+---
+
+## WARNINGS — Degrades a Required Behaviour
+
+### 6. No upsert logic — daily batch drift updates are silently ignored
+**Files:** `dim_loader.py`, `ingestion_runner.py`
+
+Every dimension loader uses `INSERT … ON CONFLICT DO NOTHING`. Daily batch files carry drifted metrics (`driver.rating_avg`, `restaurant.rating_avg`, `agent.csat_score`, etc.) but existing PKs are silently skipped. The DWH shows day-1 values permanently. Fact analytics against "current" driver performance or restaurant ratings will be stale. An `ON CONFLICT DO UPDATE SET …` is needed for all entity-type dimensions.
+
+---
+
+### 7. `schema_validator.py`: Extra columns cause full file rejection — too strict
+**File:** `schema_validator.py`
+
+`validate_columns()` checks exact set equality (`df_columns != schema_columns`). Any extra column from the source system causes the entire file to be rejected and an alert to fire. The requirement says to log and continue. Extra columns should be dropped with a warning, not treated as a critical schema failure that quarantines all records.
+
+---
+
+### 8. `file_watcher.py`: Alphabetical batch scan order can violate FK insert order
+**File:** `file_watcher.py`
+
+`BatchWatcherThread._scan()` uses `sorted(today_dir.glob(…))` — purely alphabetical. Alphabetically, `customers.csv` arrives before `regions.csv` would have been fully loaded if they come in the same scan. More concretely: `dim_customer` has an FK on `region_id → dim_region`. If `customers.csv` is processed before `regions.csv` loads (which the alphabet does respect here, but `agents.csv` loads before `teams.csv` which it requires via `team_id → dim_team`), Postgres will reject the INSERTs at the DB level since FK constraints are active.
+
+---
+
+### 9. `dim_loader.py`: `_city_cache` is only populated during seeder run — empty on restart
+**File:** `dim_loader.py`, `master_seeder.py`
+
+`load_cities()` only populates the module-level `_city_cache` dict — it does not insert any rows into Postgres. On the first pipeline run (seeder) the cache is filled and regions get `city_name` values. On all subsequent runs, the seeder skips cities (already processed per file_tracker). The cache starts empty. All regions loaded during daily batch processing will have `city_name = NULL` permanently after day 1.
+
+---
+
+### 10. `alerter.py`: Non-daemon alert thread can delay shutdown indefinitely
+**File:** `alerter.py`
+
+The comment explicitly removes `daemon=True`. On `Ctrl+C`, the pipeline calls `stop()` and returns, but Python won't exit until all non-daemon threads finish. If SMTP is slow or unreachable, the process hangs for the full socket timeout (potentially minutes) before the terminal returns. A `thread.join(timeout=30)` or converting back to daemon with a flush would fix this.
+
+---
+
+### 11. `pipeline_config.yaml`: Hardcoded credentials in version-controlled file
+**File:** `pipeline_config.yaml`
+
+`password: "admin"` (Postgres) and SMTP credentials (`user_name`, `password`) are plaintext in the config. Even if `.gitignore` is set up correctly, this is a security risk. Environment variable substitution (`${PGPASSWORD}`) or a secrets manager is needed.
+
+---
+
+### 12. `sla_updater_job.py` creates a new SQLAlchemy engine on every iteration
+**File:** `sla_updater_job.py`
+
+`create_engine(conn_str)` is called inside the `while True: … time.sleep(300)` loop. SQLAlchemy engines maintain an internal connection pool. Creating a new one every 5 minutes progressively leaks connections. The engine must be created once before the loop.
+
+---
+
+### 13. Bonus PDF quality report is not implemented
+**Scope:** project-wide
+
+The bonus asks for a daily PDF containing quality metric summary, validation statistics, data health indicators, rejected data summary, processing latency metrics, and orphan summary — to be emailed automatically. No `report_generator.py`, no PDF library (`reportlab`, `fpdf`, etc.) usage, and no email attachment logic exist anywhere in the codebase.
+
+---
+
+### 14. `stream_records_validator.py`: No SLA timestamp ordering validation
+**File:** `stream_records_validator.py`
+
+The validator checks monetary amounts for negatives but does not validate that `first_response_at > created_at` or `resolved_at > first_response_at`. Injected bad timestamps (from `introduce_data_quality_issues()`) will produce negative `first_response_min` / `resolution_min` values in `fact_ticket`, silently corrupting SLA analytics.
+
+---
+
+## INFO — Minor Issues / Improvement Opportunities
+
+### 15. `validate_empty` quarantines rows with empty strings in nullable columns
+`batch_records_validator` and `stream_records_validator` both quarantine any row where a string column is empty after strip — including intentionally nullable columns like `notes` and `old_status`. The nullability definition in the schema is not consulted here.
+
+### 16. `batch_records_validator` includes `reason_category_id` in value-range checks but it is an ID, not a metric
+A `reason_category_id` of 0 (hypothetical) would be rejected as "out of range." Range checks should apply to business metrics, not surrogate keys.
+
+### 17. `validation_runner` prints to stdout with emoji — inappropriate for production logging
+Multiple `print(f"📄 Processing: …")` calls are scattered throughout `validation_runner.py`. These should go to the logger, not stdout.
+
+### 18. `ingestion_runner.py` has an inline duplicate of `_SOURCE_TABLE_MAP` also defined in `master_seeder.py`
+Both files define the same file-type-to-table mapping independently. Any addition to one must be manually mirrored to the other.
+
+### 19. `file_tracker.is_processed()` has no timeout — a hung TrackerThread silently deadlocks callers
+If `TrackerThread` crashes silently (e.g. SQLite file permission error), every subsequent `is_processed()` call will block the calling thread forever. A `future.result(timeout=10)` guard would convert this to a recoverable exception.
+
+### 20. `sla_updater_job.py` creates a VIEW on every 5-minute tick — unnecessary DDL churn
+`CREATE OR REPLACE VIEW` is DDL. Running it every 5 minutes acquires an exclusive lock on the view definition and is unnecessary. The view should be created once at startup; only the underlying data changes.
+
+---
+
+## CONFIRMED CORRECT
+
+| # | Area | Detail |
+|---|------|---------|
+| 1 | Fault tolerance | Every stage in `_process_file()` wrapped in try/except; pipeline never stops on single file error |
+| 2 | Idempotency | MD5 hash + SQLite tracker; same file re-arriving is silently skipped |
+| 3 | PII masking | SHA-256 applied to email, phone, national_id before any DWH write; full names kept plain |
+| 4 | SLA breach flags | Calculated in `fact_loader.load_tickets()` before INSERT — meets spec requirement |
+| 5 | Structured async logging | JSON formatter + QueueListener single-writer thread — no interleaving, no disk contention |
+| 6 | Orphan quarantine design | FK failures → quarantine with `rejection_stage='orphan'`; 24h promotion design is correct in intent |
+| 7 | Async email alerting | `send_alert()` spawns a background thread immediately and returns — pipeline is never blocked |
+| 8 | Config-driven schema registry | All schemas in YAML; no hardcoded schemas in Python — adding a table requires only config changes |

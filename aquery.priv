@@ -1,0 +1,31 @@
+SELECT COUNT(*) FROM public.dim_agent
+UNION ALL
+SELECT COUNT(*) FROM public.dim_category
+UNION ALL
+SELECT COUNT(*) FROM public.dim_channel
+UNION ALL
+SELECT COUNT(*) FROM public.dim_customer
+UNION ALL
+SELECT COUNT(*) FROM public.dim_date
+UNION ALL
+SELECT COUNT(*) FROM public.dim_driver
+UNION ALL
+SELECT COUNT(*) FROM public.dim_priority
+UNION ALL
+SELECT COUNT(*) FROM public.dim_reason
+UNION ALL
+SELECT COUNT(*) FROM public.dim_reason_category
+UNION ALL
+SELECT COUNT(*) FROM public.dim_region
+UNION ALL
+SELECT COUNT(*) FROM public.dim_restaurant
+UNION ALL
+SELECT COUNT(*) FROM public.dim_segment
+UNION ALL
+SELECT COUNT(*) FROM public.dim_team
+UNION ALL
+SELECT COUNT(*) FROM public.fact_order
+UNION ALL
+SELECT COUNT(*) FROM public.fact_ticket
+UNION ALL
+SELECT COUNT(*) FROM public.fact_ticket_event;
