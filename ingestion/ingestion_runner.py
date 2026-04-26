@@ -210,12 +210,30 @@ def _run_loop(file_queue: Queue[Path]) -> None:
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+
 def start() -> None:
     logger.info("[runner] starting ingestion layer")
 
     # Initialise DWH — create DB, pool, tables
     init_pool()
     init_schema()
+    
+    
+    try:
+        # ── Start SLA updater now that tables exist ──────────────────────────
+        from utils.sla_updater_job import sla_scheduler_loop
+        sla_thread = threading.Thread(
+            target=sla_scheduler_loop,
+            args=(_stop_evt,),
+            daemon=True,
+            name="SLAUpdater",
+        )
+        sla_thread.start()
+        logger.info("SLA updater started in background") 
+    except Exception as e:
+        print(f"⚠️ Warning: Could not start SLA Updater: {e}")
+    
+    # ─────────────────────────────────────────────────────────────────────
 
     # Seed master data before watching for any new files
     file_tracker.start()

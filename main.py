@@ -17,16 +17,6 @@ def main():
     print("=====================================================\n")
 
     try:
-        sla_thread = threading.Thread(
-            target=sla_scheduler_loop,
-            args=(ingestion_runner._stop_evt,),
-            daemon=True)
-        sla_thread.start()
-        logger.info("SLA updater started in background")        
-    except Exception as e:
-        print(f"⚠️ Warning: Could not start SLA Updater: {e}")
-
-    try:
         # This will block the main thread and run the continuous ingestion loop
         ingestion_runner.start()
         

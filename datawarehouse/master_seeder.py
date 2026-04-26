@@ -189,7 +189,7 @@ def _seed_file(path: Path, file_type_name: str) -> str:
             file_path    = file_path,
             source_table = source_table,
         )
-        is_valid, clean_df, _, processed_ts = validator.run()
+        is_valid, clean_df, _, processed_ts, _ = validator.run()
 
         if not is_valid:
             error_msg = f"Schema validation failed for master file {filename}"
